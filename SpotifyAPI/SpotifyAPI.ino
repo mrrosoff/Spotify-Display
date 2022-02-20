@@ -1,9 +1,6 @@
 #ifndef SPOTIFY_DISPLAY
 #define SPOTIFY_DISPLAY
 
-//STD Libraries
-#include <string>
-
 // Arduino Libraries
 #include <SPI.h>
 #include <WiFiNINA.h>
@@ -105,26 +102,32 @@ class SpotifyWiFiClient : public SpotifyAPIFunctionality {
            }
        }
 
+        enum ClientType {OAUTH, ALBUM_URL, ALBUM_ART, NUM_CLIENTS};
+        void nextClient() {
+            currentClient = static_cast<ClientType>((currentClient) + 1 % ClientType::NUM_CLIENTS);
+        }
+
     
-    WiFiSSLClient SSLClient;
+        WiFiSSLClient SSLClient;
+        ClientType currentClient = ClientType::OAUTH;
 
-    String oauthToken;
-    long oauthExpiryTime = 0;
+        String oauthToken;
+        long oauthExpiryTime = 0;
 
-    long nextAlbumArtRetrievalTime = 0;
-    long nextDisplayUpdate = 0;
-    String albumArtURL;
+        long nextAlbumArtRetrievalTime = 0;
+        long nextDisplayUpdate = 0;
+        String albumArtURL;
 
-    // Wifi Constants
-    const uint16_t CONNECTION_PORT = 443;
-    String GET = "GET";
-    String POST = "POST";
-    String HOST = "Host: ";
-    String AUTHORIZATION = "Authorization: ";
-    String HTTP_VERSION = "HTTP/1.1";
-    String CONTENT_TYPE = "Content-Type: ";
-    String CONTENT_LENGTH = "Content-Length: ";
-    String CONNECTION_CLOSE = "Connection: close";
+        // Wifi Constants
+        const uint16_t CONNECTION_PORT = 443;
+        String GET = "GET";
+        String POST = "POST";
+        String HOST = "Host: ";
+        String AUTHORIZATION = "Authorization: ";
+        String HTTP_VERSION = "HTTP/1.1";
+        String CONTENT_TYPE = "Content-Type: ";
+        String CONTENT_LENGTH = "Content-Length: ";
+        String CONNECTION_CLOSE = "Connection: close";
 };
 
 class WiFiUtilities {
@@ -176,6 +179,7 @@ void setup() {
 
 // TODO: Don't want in loop for redeclaring every time
 SpotifyWiFiClient spotifyClient("a9a84f65fc9f47568870f4c0c0185e3a", "7cb7fe064e1844c19e87a2d475573948", "AQAQL12IRdZORwdVF8sJeSiTrSNRVKbv1yZNqUFcfT6-ztpwK1gDjRFQZ0gQn5kBzKVL_3veFiHku1m8aDFYtThJzY9kjj3oX8_juhXTA9bn5_VSPHdqoSDPnsotBaEMkck");
+typedef SpotifyWiFiClient::ClientType ClientType;
 void loop() {
 
     if(static_cast<long>(millis()) - spotifyClient.oauthExpiryTime > 0) {
@@ -195,7 +199,8 @@ void loop() {
         spotifyClient.nextDisplayUpdate = static_cast<long>(millis()) + 10000;
     }
 
-    while(spotifyClient.SSLClient.available()) {
+    // OAUTH Client Loop
+    while(spotifyClient.currentClient == ClientType::OAUTH && spotifyClient.SSLClient.available()) {
         if(!spotifyClient.checkHTTPStatus()) return;
         spotifyClient.skipHTTPHeaders();
 
@@ -209,10 +214,12 @@ void loop() {
 
         spotifyClient.oauthToken = doc["access_token"].as<const char*>();
         spotifyClient.oauthExpiryTime = (doc["expires_in"].as<long>() * 1000) - (10 * 1000);
+        spotifyClient.nextClient();
         spotifyClient.SSLClient.stop();
     }
 
-    while (spotifyClient.SSLClient.available()) {
+    // Album URL Client Loop
+    while(spotifyClient.currentClient == ClientType::ALBUM_URL && spotifyClient.SSLClient.available()) {
         if (!spotifyClient.checkHTTPStatus()) return;
         spotifyClient.skipHTTPHeaders();
 
@@ -225,7 +232,27 @@ void loop() {
         }
 
         spotifyClient.albumArtURL = doc["item"]["album"]["images"][2]["url"].as<const char*>();
+        spotifyClient.nextClient();
         spotifyClient.SSLClient.stop();
+    }
+
+    // Album Art Client Loop
+    while(spotifyClient.currentClient == ClientType::ALBUM_ART && spotifyClient.SSLClient.available()) {
+        // if (!checkHTTPStatus(albumArtClient)) return;
+        // skipHTTPHeaders(albumArtClient);
+
+        char c = spotifyClient.SSLClient.read();
+        Serial.write(c);
+        // DynamicJsonDocument doc(16384);
+        // DeserializationError error = deserializeJson(doc, spotifyClient.SSLClient);
+        // if (error) {
+        //   Serial.println(error.f_str());
+        //   spotifyClient.SSLClient.stop();
+        //   return;
+        // }
+
+        // spotifyClient.nextClient();
+        // spotifyClient.SSLClient.stop();
     }
 
 }
