@@ -1,5 +1,7 @@
 #include "SpotifyWiFiClient.h"
 
+#include "base64.hpp"
+
 using namespace std;
 
 SpotifyWiFiClient::SpotifyWiFiClient(const string &clientId, const string &clientSecret, const string &refreshToken) : 
@@ -12,8 +14,10 @@ spotifyApplicationIdentifier(clientId + ":" + clientSecret), postData("grant_typ
 
 void SpotifyWiFiClient::getOAuthToken() {
     SSLClient.stop();
-    const string spotifyAccounts = "accounts.spotify.com";   
-     
+    const string spotifyAccounts = "accounts.spotify.com";
+    currentClient = ClientType::OAUTH;
+    Serial.println("Requesting OAuth Token");
+
     if(SSLClient.connectSSL(spotifyAccounts.c_str(), CONNECTION_PORT)) {
         SSLClient.println((POST + " /api/token " + HTTP_VERSION).c_str());
         SSLClient.println((HOST + spotifyAccounts).c_str());
@@ -29,6 +33,8 @@ void SpotifyWiFiClient::getOAuthToken() {
 void SpotifyWiFiClient::getAlbumArtURL() {
     SSLClient.stop();
     string spotifyApi = "api.spotify.com";
+    currentClient = ClientType::ALBUM_URL;
+    Serial.println("Requesting Album Art Url");
 
     if(SSLClient.connectSSL(spotifyApi.c_str(), CONNECTION_PORT)) {
         SSLClient.println((GET + " /v1/me/player/currently-playing " + HTTP_VERSION).c_str());
@@ -43,11 +49,13 @@ void SpotifyWiFiClient::getAlbumArtURL() {
 void SpotifyWiFiClient::getAlbumArt() {
     SSLClient.stop();
     const int beginningIndex = albumArtURL.find("//") + 2;
-    string imageApi = albumArtURL.substr(beginningIndex, albumArtURL.find("/", beginningIndex));
+    string imageApi = albumArtURL.substr(beginningIndex, albumArtURL.find("/", beginningIndex) - beginningIndex);
     string imageExtension = albumArtURL.substr(albumArtURL.find("/", beginningIndex));
+    currentClient = ClientType::ALBUM_ART;
+    Serial.println("Requesting Album Art");
 
     if(SSLClient.connectSSL(imageApi.c_str(), CONNECTION_PORT)) {
-        SSLClient.println((GET + imageExtension + " " + HTTP_VERSION).c_str());
+        SSLClient.println((GET + " " + imageExtension + " " + HTTP_VERSION).c_str());
         SSLClient.println((HOST + imageApi).c_str());
         SSLClient.println((AUTHORIZATION + "Bearer " + oauthToken).c_str());
         SSLClient.println(CONNECTION_CLOSE.c_str());
@@ -56,15 +64,32 @@ void SpotifyWiFiClient::getAlbumArt() {
 }
 
 bool SpotifyWiFiClient::checkHTTPStatus() {
-    char status[32] = {0};
+    char status[32];
     SSLClient.readBytesUntil('\r', status, sizeof(status));
-    if (strcmp(status, "HTTP/1.1 200 OK") != 0) {
-        Serial.print("Unexpected response: ");
-        Serial.println(status);
-        SSLClient.stop();
-        return false;
+    vector<string> tokens = splitHTTPStatus(status, " ");
+    if (tokens[1][0] != '2') {
+       Serial.print("Bad Request. Status: ");
+       Serial.println(status);
+       SSLClient.stop();
+       return false;
+    } else if (tokens[1] == "204") {
+       Serial.println("Nothing Playing.");
+       SSLClient.stop();
+       return false;
     }
     return true;
+}
+
+vector<string> SpotifyWiFiClient::splitHTTPStatus(const string &str, const string &delim) {
+  vector<string> tokens;
+  string operationStr = str;
+  size_t pos;
+  while ((pos = operationStr.find(delim)) != std::string::npos) {
+    tokens.push_back(operationStr.substr(0, pos));
+    operationStr.erase(0, pos + delim.length());
+  }
+  tokens.push_back(operationStr);
+  return tokens;
 }
 
 bool SpotifyWiFiClient::skipHTTPHeaders() {
@@ -74,8 +99,4 @@ bool SpotifyWiFiClient::skipHTTPHeaders() {
         SSLClient.stop();
         return false;
     }
-}
-
-void SpotifyWiFiClient::nextClient() {
-    currentClient = static_cast<ClientType>((currentClient) + 1 % ClientType::NUM_CLIENTS);
 }

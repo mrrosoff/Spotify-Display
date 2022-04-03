@@ -2,11 +2,10 @@
 #define SPOTIFY_WIFI_CLIENT
 
 #include <string>
+#include <vector>
 
 #include <SPI.h>
 #include <WiFiNINA.h>
-
-#include "base64.hpp"
 
 class SpotifyWiFiClient {
   
@@ -24,11 +23,12 @@ class SpotifyWiFiClient {
     void getAlbumArt();
 
     bool checkHTTPStatus();
+    std::vector<std::string> splitHTTPStatus(const std::string &, const std::string &);
     bool skipHTTPHeaders();
 
     void nextClient();
 
-    enum ClientType {OAUTH, ALBUM_URL, ALBUM_ART, NUM_CLIENTS};
+    enum ClientType {OAUTH, ALBUM_URL, ALBUM_ART};
     ClientType currentClient = ClientType::OAUTH;
 
     std::string oauthToken;

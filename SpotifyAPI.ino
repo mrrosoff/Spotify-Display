@@ -1,11 +1,21 @@
 
 #include <string>
+#include <vector>
 
-#include <base64.hpp>
 #include <ArduinoJson.h>
+#include <JPEGDEC.h>
+#include <RGBmatrixPanel.h>
 
 #include "SpotifyWiFiClient.h"
 #include "WiFiUtilities.h"
+
+#define CLK 10
+#define OE   11
+#define LAT 12
+#define A   A0
+#define B   A2
+#define C   A3
+#define D   A6
 
 using namespace std;
 
@@ -15,6 +25,10 @@ string refreshToken = "AQAQL12IRdZORwdVF8sJeSiTrSNRVKbv1yZNqUFcfT6-ztpwK1gDjRFQZ
 
 SpotifyWiFiClient spotifyClient(clientId, clientSecret, refreshToken);
 typedef SpotifyWiFiClient::ClientType ClientType;
+JPEGDEC jpeg;
+
+uint8_t RGBPins[6] = { 4, 5, 6, 7, 8, 9 };
+RGBmatrixPanel matrix(A, B, C, D, CLK, LAT, OE, false, 32, RGBPins);
 
 void setup() {
   Serial.begin(9600);
@@ -23,21 +37,23 @@ void setup() {
   WiFiUtilities wifiCheck("The Force", "thisistheway");
   wifiCheck.checkWiFiModule();
   wifiCheck.connectToWiFi();
+
+  matrix.begin();
 }
 
 void loop() {
   oauthCheckAndRetrieve(spotifyClient);
   albumArtURLCheckAndRetrieve(spotifyClient);
-  albumArtCheckAndRetrieve(spotifyClient);
-
+  
   oauthClientLoop(spotifyClient);
   albumArtURLClientLoop(spotifyClient);
   albumArtClientLoop(spotifyClient);
+
+  delay(500);
 }
 
 void oauthCheckAndRetrieve(SpotifyWiFiClient &spotifyClient) {
   if(static_cast<long>(millis()) - spotifyClient.oauthExpiryTime > 0) {
-    Serial.println("Requesting OAuth Token");
     spotifyClient.getOAuthToken();
     spotifyClient.oauthExpiryTime = static_cast<long>(millis()) + 10000;
   }
@@ -45,17 +61,8 @@ void oauthCheckAndRetrieve(SpotifyWiFiClient &spotifyClient) {
 
 void albumArtURLCheckAndRetrieve(SpotifyWiFiClient &spotifyClient) {
   if(spotifyClient.oauthToken.length() > 0 && static_cast<long>(millis()) - spotifyClient.nextAlbumArtRetrievalTime > 0) {
-    Serial.println("Requesting Album Art");
     spotifyClient.getAlbumArtURL();
-    spotifyClient.nextAlbumArtRetrievalTime = static_cast<long>(millis()) + 50000;
-  }
-}
-
-void albumArtCheckAndRetrieve(SpotifyWiFiClient &spotifyClient) {
-  if(spotifyClient.albumArtURL.length() > 0 && static_cast<long>(millis()) - spotifyClient.nextDisplayUpdate > 0) {
-    Serial.println("Retrieving Album Art");
-    spotifyClient.getAlbumArt();
-    spotifyClient.nextDisplayUpdate = static_cast<long>(millis()) + 10000;
+    spotifyClient.nextAlbumArtRetrievalTime = static_cast<long>(millis()) + 30000;
   }
 }
 
@@ -74,8 +81,10 @@ void oauthClientLoop(SpotifyWiFiClient &spotifyClient) {
 
     spotifyClient.oauthToken = doc["access_token"].as<const char*>();
     spotifyClient.oauthExpiryTime = (doc["expires_in"].as<long>() * 1000) - (10 * 1000);
-    spotifyClient.nextClient();
     spotifyClient.SSLClient.stop();
+
+    Serial.println("Retreived OAuth Token");
+    Serial.println(spotifyClient.oauthToken.c_str());
   }
 }
 
@@ -93,27 +102,38 @@ void albumArtURLClientLoop(SpotifyWiFiClient &spotifyClient) {
     }
 
     spotifyClient.albumArtURL = doc["item"]["album"]["images"][2]["url"].as<const char*>();
-    spotifyClient.nextClient();
     spotifyClient.SSLClient.stop();
+
+    Serial.println("Retreived Album Art Url");
+    Serial.println(spotifyClient.albumArtURL.c_str());
+
+    spotifyClient.getAlbumArt();
   }
+}
+
+int JPEGDraw(JPEGDRAW *pDraw)
+{
+  for (int i = 0; i < 32; i++) {
+    for (int j = 0; j < 32; j++) {
+      matrix.drawPixel(i, j, matrix.Color888(i * 4, j * 4, (millis() / 1000) % 256));
+    }
+  }
+  matrix.updateDisplay();
+  return 0;
 }
 
 void albumArtClientLoop(SpotifyWiFiClient &spotifyClient) {
   while(spotifyClient.currentClient == ClientType::ALBUM_ART && spotifyClient.SSLClient.available()) {
-    // if (!checkHTTPStatus(albumArtClient)) return;
-    // skipHTTPHeaders(albumArtClient);
+    if (!spotifyClient.checkHTTPStatus()) return;
+    spotifyClient.skipHTTPHeaders();
 
-    char c = spotifyClient.SSLClient.read();
-    Serial.write(c);
-    // DynamicJsonDocument doc(16384);
-    // DeserializationError error = deserializeJson(doc, spotifyClient.SSLClient);
-    // if (error) {
-    //   Serial.println(error.f_str());
-    //   spotifyClient.SSLClient.stop();
-    //   return;
-    // }
+    uint8_t image[4096];
+    int imageBytes = spotifyClient.SSLClient.readBytes(image, sizeof(image));
+    spotifyClient.SSLClient.stop();
 
-    // spotifyClient.nextClient();
-    // spotifyClient.SSLClient.stop();
+    Serial.println("Retreived Album Art Url");
+    Serial.println(image[0]);
+    
+    jpeg.openRAM(image, imageBytes, JPEGDraw);
   }
-}
+} // https://github.com/bitbank2/JPEGDEC/wiki
