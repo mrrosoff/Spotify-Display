@@ -111,7 +111,7 @@ void getAlbumArtUrlResponse(SpotifyWiFiClient &spotifyClient) {
     return;
   }
 
-  const string albumArtURL = doc["item"]["album"]["images"][0]["url"].as<const char *>();
+  const string albumArtURL = doc["item"]["album"]["images"][2]["url"].as<const char *>();
   spotifyClient.SSLClient.stop();
 
   Serial.println(("Album Art Url: " + albumArtURL).c_str());
@@ -136,7 +136,7 @@ void getPixelsResponse(SpotifyWiFiClient &spotifyClient) {
       return;
     }
 
-    matrix.drawPixel(i / 32, i % 32, matrix.Color888(doc["r"], doc["g"], doc["b"]));
+    matrix.drawPixel(i / 32, i % 32, matrix.Color888(doc["r"].as< int>(), doc["g"].as< int>(), doc["b"].as< int>()));
     i++;
   } while (spotifyClient.SSLClient.findUntil(",", "]"));
 

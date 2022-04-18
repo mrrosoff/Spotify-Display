@@ -48,7 +48,7 @@ void SpotifyWiFiClient::getAlbumArtURL() {
 
 void SpotifyWiFiClient::getPixels() {
     SSLClient.stop();
-    const string apiGateway = "pe575u0znd.execute-api.us-west-2.amazonaws.com";
+    const string apiGateway = "8483ycajn0.execute-api.us-west-2.amazonaws.com";
     currentClient = ClientType::PIXELS;
     const string postData = "spotifyUrl=" + albumArtURL;
     Serial.println(("Getting Pixels for " + albumArtURL).c_str());
