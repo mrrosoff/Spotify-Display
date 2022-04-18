@@ -20,7 +20,7 @@ class SpotifyWiFiClient {
 
     void getOAuthToken();
     void getAlbumArtURL();
-    void getAlbumArt();
+    void getPixels();
 
     bool checkHTTPStatus();
     std::vector<std::string> splitHTTPStatus(const std::string &, const std::string &);
@@ -28,7 +28,7 @@ class SpotifyWiFiClient {
 
     void nextClient();
 
-    enum ClientType {OAUTH, ALBUM_URL, ALBUM_ART};
+    enum ClientType {OAUTH, ALBUM_URL, PIXELS};
     ClientType currentClient = ClientType::OAUTH;
 
     std::string oauthToken;
@@ -43,7 +43,7 @@ class SpotifyWiFiClient {
   private:
 
     std::string spotifyApplicationIdentifier;
-    std::string postData;
+    std::string oauthPostData;
     unsigned char base64[128] = {0};
     
     const uint16_t CONNECTION_PORT = 443;

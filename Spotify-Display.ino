@@ -3,10 +3,9 @@
 #include <vector>
 
 #include <ArduinoJson.h>
-#include <JPEGDEC.h>
 #include <RGBmatrixPanel.h>
 
-#include "SpotifyWiFiClient.h"
+#include "WiFiClient.h"
 #include "WiFiUtilities.h"
 
 #define CLK 10
@@ -25,7 +24,6 @@ string refreshToken = "AQAQL12IRdZORwdVF8sJeSiTrSNRVKbv1yZNqUFcfT6-ztpwK1gDjRFQZ
 
 SpotifyWiFiClient spotifyClient(clientId, clientSecret, refreshToken);
 typedef SpotifyWiFiClient::ClientType ClientType;
-JPEGDEC jpeg;
 
 uint8_t RGBPins[6] = { 4, 5, 6, 7, 8, 9 };
 RGBmatrixPanel matrix(A, B, C, D, CLK, LAT, OE, false, 32, RGBPins);
@@ -34,7 +32,7 @@ void setup() {
   Serial.begin(9600);
   while (!Serial); // Wait For Serial Port to Connect.
 
-  WiFiUtilities wifiCheck("The Force", "thisistheway");
+  WiFiUtilities wifiCheck("Salsa", "Guacamole");
   wifiCheck.checkWiFiModule();
   wifiCheck.connectToWiFi();
 
@@ -47,7 +45,7 @@ void loop() {
   
   oauthClientLoop(spotifyClient);
   albumArtURLClientLoop(spotifyClient);
-  albumArtClientLoop(spotifyClient);
+  pixelsClientLoop(spotifyClient);
 
   delay(500);
 }
@@ -71,7 +69,9 @@ void oauthClientLoop(SpotifyWiFiClient &spotifyClient) {
     if(!spotifyClient.checkHTTPStatus()) return;
     spotifyClient.skipHTTPHeaders();
 
-    DynamicJsonDocument doc(16384);
+    Serial.println("Got OAuth Token Response");
+
+    DynamicJsonDocument doc(10000);
     DeserializationError error = deserializeJson(doc, spotifyClient.SSLClient);
     if (error) {
       Serial.println(error.f_str());
@@ -93,47 +93,62 @@ void albumArtURLClientLoop(SpotifyWiFiClient &spotifyClient) {
     if (!spotifyClient.checkHTTPStatus()) return;
     spotifyClient.skipHTTPHeaders();
 
-    DynamicJsonDocument doc(16384);
+    Serial.println("Got Album Art Url Response");
+    
+    DynamicJsonDocument doc(20000);
     DeserializationError error = deserializeJson(doc, spotifyClient.SSLClient);
+
     if (error) {
       Serial.println(error.f_str());
       spotifyClient.SSLClient.stop();
       return;
     }
 
-    spotifyClient.albumArtURL = doc["item"]["album"]["images"][2]["url"].as<const char*>();
+    const string albumArtUrl = doc["item"]["album"]["images"][0]["url"].as<const char *>();
     spotifyClient.SSLClient.stop();
 
     Serial.println("Retreived Album Art Url");
     Serial.println(spotifyClient.albumArtURL.c_str());
 
-    spotifyClient.getAlbumArt();
+    if (spotifyClient.albumArtURL != albumArtUrl) {
+      spotifyClient.albumArtURL = albumArtUrl;
+      spotifyClient.getPixels();
+    }
   }
 }
 
-int JPEGDraw(JPEGDRAW *pDraw)
-{
-  for (int i = 0; i < 32; i++) {
-    for (int j = 0; j < 32; j++) {
+void pixelsClientLoop(SpotifyWiFiClient &spotifyClient) {
+  while(spotifyClient.currentClient == ClientType::PIXELS && spotifyClient.SSLClient.available()) {
+    if (!spotifyClient.checkHTTPStatus()) return;
+    spotifyClient.skipHTTPHeaders();
+
+    Serial.println("Got Pixels Response");
+
+    DynamicJsonDocument doc(40000);
+    DeserializationError error = deserializeJson(doc, spotifyClient.SSLClient);
+    if (error)
+    {
+      Serial.println(error.f_str());
+      spotifyClient.SSLClient.stop();
+      return;
+    }
+
+    const JsonArray pixels = doc["pixels"];
+    spotifyClient.SSLClient.stop();
+
+    Serial.println("Retreived Pixels");
+
+    writeDisplay(pixels);
+  }
+} 
+
+void writeDisplay(const JsonArray &pixels) {
+  for (int i = 0; i < 32; i++)
+  {
+    for (int j = 0; j < 32; j++)
+    {
       matrix.drawPixel(i, j, matrix.Color888(i * 4, j * 4, (millis() / 1000) % 256));
     }
   }
   matrix.updateDisplay();
-  return 0;
 }
-
-void albumArtClientLoop(SpotifyWiFiClient &spotifyClient) {
-  while(spotifyClient.currentClient == ClientType::ALBUM_ART && spotifyClient.SSLClient.available()) {
-    if (!spotifyClient.checkHTTPStatus()) return;
-    spotifyClient.skipHTTPHeaders();
-
-    uint8_t image[4096];
-    int imageBytes = spotifyClient.SSLClient.readBytes(image, sizeof(image));
-    spotifyClient.SSLClient.stop();
-
-    Serial.println("Retreived Album Art Url");
-    Serial.println(image[0]);
-    
-    jpeg.openRAM(image, imageBytes, JPEGDraw);
-  }
-} // https://github.com/bitbank2/JPEGDEC/wiki

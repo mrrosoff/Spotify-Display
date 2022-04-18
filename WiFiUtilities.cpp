@@ -21,7 +21,6 @@ void WiFiUtilities::connectToWiFi() {
 
     WiFi.begin(ssid.c_str(), password.c_str());
     while (WiFi.status() != WL_CONNECTED) {
-        Serial.println(WiFi.status());
         delay(200);
     }
 

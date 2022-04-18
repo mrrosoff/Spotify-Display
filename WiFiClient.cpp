@@ -1,4 +1,4 @@
-#include "SpotifyWiFiClient.h"
+#include "WiFiClient.h"
 
 #include "base64.hpp"
 
@@ -6,7 +6,7 @@ using namespace std;
 
 SpotifyWiFiClient::SpotifyWiFiClient(const string &clientId, const string &clientSecret, const string &refreshToken) : 
     
-spotifyApplicationIdentifier(clientId + ":" + clientSecret), postData("grant_type=refresh_token&refresh_token=" + refreshToken) 
+spotifyApplicationIdentifier(clientId + ":" + clientSecret), oauthPostData("grant_type=refresh_token&refresh_token=" + refreshToken) 
 
 {
     encode_base64((unsigned char *) spotifyApplicationIdentifier.c_str(), strlen(spotifyApplicationIdentifier.c_str()), base64);
@@ -23,10 +23,10 @@ void SpotifyWiFiClient::getOAuthToken() {
         SSLClient.println((HOST + spotifyAccounts).c_str());
         SSLClient.println((AUTHORIZATION + "Basic " + (char *) base64).c_str());
         SSLClient.println((CONTENT_TYPE + "application/x-www-form-urlencoded").c_str());
-        SSLClient.println((CONTENT_LENGTH + to_string(postData.size())).c_str());
+        SSLClient.println((CONTENT_LENGTH + to_string(oauthPostData.size())).c_str());
         SSLClient.println(CONNECTION_CLOSE.c_str());
         SSLClient.println();
-        SSLClient.println(postData.c_str());
+        SSLClient.println(oauthPostData.c_str());
     }
 }
 
@@ -46,20 +46,21 @@ void SpotifyWiFiClient::getAlbumArtURL() {
     }
 }
 
-void SpotifyWiFiClient::getAlbumArt() {
+void SpotifyWiFiClient::getPixels() {
     SSLClient.stop();
-    const int beginningIndex = albumArtURL.find("//") + 2;
-    string imageApi = albumArtURL.substr(beginningIndex, albumArtURL.find("/", beginningIndex) - beginningIndex);
-    string imageExtension = albumArtURL.substr(albumArtURL.find("/", beginningIndex));
-    currentClient = ClientType::ALBUM_ART;
-    Serial.println("Requesting Album Art");
+    const string apiGateway = "pe575u0znd.execute-api.us-west-2.amazonaws.com";
+    currentClient = ClientType::PIXELS;
+    const string postData = "{\"spotifyUrl\": \"" + albumArtURL + "\"}";
+    Serial.println("Getting Pixels");
 
-    if(SSLClient.connectSSL(imageApi.c_str(), CONNECTION_PORT)) {
-        SSLClient.println((GET + " " + imageExtension + " " + HTTP_VERSION).c_str());
-        SSLClient.println((HOST + imageApi).c_str());
-        SSLClient.println((AUTHORIZATION + "Bearer " + oauthToken).c_str());
+    if (SSLClient.connectSSL(apiGateway.c_str(), CONNECTION_PORT)){
+        SSLClient.println((POST + " /dev/imageConverter " + HTTP_VERSION).c_str());
+        SSLClient.println((HOST + apiGateway).c_str());
+        SSLClient.println((CONTENT_TYPE + "application/json").c_str());
+        SSLClient.println((CONTENT_LENGTH + to_string(postData.size())).c_str());
         SSLClient.println(CONNECTION_CLOSE.c_str());
         SSLClient.println();
+        SSLClient.println(postData.c_str());
     }
 }
 
