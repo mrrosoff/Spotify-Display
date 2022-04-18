@@ -43,10 +43,7 @@ void loop() {
   oauthCheckAndRetrieve(spotifyClient);
   albumArtURLCheckAndRetrieve(spotifyClient);
   
-  oauthClientLoop(spotifyClient);
-  albumArtURLClientLoop(spotifyClient);
-  pixelsClientLoop(spotifyClient);
-
+  clientResponseChecker(spotifyClient);
   delay(500);
 }
 
@@ -60,71 +57,77 @@ void oauthCheckAndRetrieve(SpotifyWiFiClient &spotifyClient) {
 void albumArtURLCheckAndRetrieve(SpotifyWiFiClient &spotifyClient) {
   if(spotifyClient.oauthToken.length() > 0 && static_cast<long>(millis()) - spotifyClient.nextAlbumArtRetrievalTime > 0) {
     spotifyClient.getAlbumArtURL();
-    spotifyClient.nextAlbumArtRetrievalTime = static_cast<long>(millis()) + 30000;
+    spotifyClient.nextAlbumArtRetrievalTime = static_cast<long>(millis()) + 10000;
   }
 }
 
-void oauthClientLoop(SpotifyWiFiClient &spotifyClient) {
-  while(spotifyClient.currentClient == ClientType::OAUTH && spotifyClient.SSLClient.available()) {
+void clientResponseChecker(SpotifyWiFiClient &spotifyClient) {
+  if (spotifyClient.SSLClient.available()) {
     if(!spotifyClient.checkHTTPStatus()) return;
     spotifyClient.skipHTTPHeaders();
-
-    Serial.println("Got OAuth Token Response");
-
-    DynamicJsonDocument doc(10000);
-    DeserializationError error = deserializeJson(doc, spotifyClient.SSLClient);
-    if (error) {
-      Serial.println(error.f_str());
-      spotifyClient.SSLClient.stop();
-      return;
-    }
-
-    spotifyClient.oauthToken = doc["access_token"].as<const char*>();
-    spotifyClient.oauthExpiryTime = (doc["expires_in"].as<long>() * 1000) - (10 * 1000);
-    spotifyClient.SSLClient.stop();
-
-    Serial.println("Retreived OAuth Token");
-    Serial.println(spotifyClient.oauthToken.c_str());
-  }
-}
-
-void albumArtURLClientLoop(SpotifyWiFiClient &spotifyClient) {
-  while(spotifyClient.currentClient == ClientType::ALBUM_URL && spotifyClient.SSLClient.available()) {
-    if (!spotifyClient.checkHTTPStatus()) return;
-    spotifyClient.skipHTTPHeaders();
-
-    Serial.println("Got Album Art Url Response");
     
-    DynamicJsonDocument doc(20000);
-    DeserializationError error = deserializeJson(doc, spotifyClient.SSLClient);
-
-    if (error) {
-      Serial.println(error.f_str());
-      spotifyClient.SSLClient.stop();
-      return;
-    }
-
-    const string albumArtUrl = doc["item"]["album"]["images"][0]["url"].as<const char *>();
-    spotifyClient.SSLClient.stop();
-
-    Serial.println("Retreived Album Art Url");
-    Serial.println(spotifyClient.albumArtURL.c_str());
-
-    if (spotifyClient.albumArtURL != albumArtUrl) {
-      spotifyClient.albumArtURL = albumArtUrl;
-      spotifyClient.getPixels();
+    switch(spotifyClient.currentClient) {
+      case ClientType::OAUTH:
+        Serial.println("OAuth Token Response");
+        getOAuthTokenResponse(spotifyClient);
+        return;
+      case ClientType::ALBUM_URL:
+        Serial.println("Album Art Url Response");
+        getAlbumArtUrlResponse(spotifyClient);
+        return;
+      case ClientType::PIXELS:
+        Serial.println("Pixels Response");
+        getPixelsResponse(spotifyClient);
+        return;
     }
   }
 }
 
-void pixelsClientLoop(SpotifyWiFiClient &spotifyClient) {
-  while(spotifyClient.currentClient == ClientType::PIXELS && spotifyClient.SSLClient.available()) {
-    if (!spotifyClient.checkHTTPStatus()) return;
-    spotifyClient.skipHTTPHeaders();
+void getOAuthTokenResponse(SpotifyWiFiClient &spotifyClient) { 
+  StaticJsonDocument<768> doc;
+  DeserializationError error = deserializeJson(doc, spotifyClient.SSLClient);
+  if (error) {
+    Serial.println(error.f_str());
+    spotifyClient.SSLClient.stop();
+    return;
+  }
 
-    Serial.println("Got Pixels Response");
+  spotifyClient.oauthToken = doc["access_token"].as<const char*>();
+  spotifyClient.oauthExpiryTime = (doc["expires_in"].as<long>() * 1000) - (10 * 1000);
+  spotifyClient.SSLClient.stop();
 
-    DynamicJsonDocument doc(40000);
+  Serial.println(("OAuth Token: " + spotifyClient.oauthToken).c_str());
+}
+
+void getAlbumArtUrlResponse(SpotifyWiFiClient &spotifyClient) {
+  StaticJsonDocument<256> filter;
+  filter["item"]["album"]["images"][0]["url"] = true;
+
+  StaticJsonDocument<384> doc;
+  DeserializationError error = deserializeJson(doc, spotifyClient.SSLClient, DeserializationOption::Filter(filter));
+  if (error) {
+    Serial.println(error.f_str());
+    spotifyClient.SSLClient.stop();
+    return;
+  }
+
+  const string albumArtURL = doc["item"]["album"]["images"][0]["url"].as<const char *>();
+  spotifyClient.SSLClient.stop();
+
+  Serial.println(("Album Art Url: " + albumArtURL).c_str());
+
+  if (spotifyClient.albumArtURL != albumArtURL) {
+    spotifyClient.albumArtURL = albumArtURL;
+    spotifyClient.getPixels();
+  }
+}
+
+void getPixelsResponse(SpotifyWiFiClient &spotifyClient) {
+  spotifyClient.SSLClient.find("[");
+  int i = 0;
+  
+  do {
+    StaticJsonDocument<64> doc;
     DeserializationError error = deserializeJson(doc, spotifyClient.SSLClient);
     if (error)
     {
@@ -133,22 +136,12 @@ void pixelsClientLoop(SpotifyWiFiClient &spotifyClient) {
       return;
     }
 
-    const JsonArray pixels = doc["pixels"];
-    spotifyClient.SSLClient.stop();
+    matrix.drawPixel(i / 32, i % 32, matrix.Color888(doc["r"], doc["g"], doc["b"]));
+    i++;
+  } while (spotifyClient.SSLClient.findUntil(",", "]"));
 
-    Serial.println("Retreived Pixels");
+  spotifyClient.SSLClient.stop();
 
-    writeDisplay(pixels);
-  }
-} 
-
-void writeDisplay(const JsonArray &pixels) {
-  for (int i = 0; i < 32; i++)
-  {
-    for (int j = 0; j < 32; j++)
-    {
-      matrix.drawPixel(i, j, matrix.Color888(i * 4, j * 4, (millis() / 1000) % 256));
-    }
-  }
+  Serial.println("Wrote Pixels");
   matrix.updateDisplay();
 }

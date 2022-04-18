@@ -50,13 +50,13 @@ void SpotifyWiFiClient::getPixels() {
     SSLClient.stop();
     const string apiGateway = "pe575u0znd.execute-api.us-west-2.amazonaws.com";
     currentClient = ClientType::PIXELS;
-    const string postData = "{\"spotifyUrl\": \"" + albumArtURL + "\"}";
-    Serial.println("Getting Pixels");
-
+    const string postData = "spotifyUrl=" + albumArtURL;
+    Serial.println(("Getting Pixels for " + albumArtURL).c_str());
+    
     if (SSLClient.connectSSL(apiGateway.c_str(), CONNECTION_PORT)){
         SSLClient.println((POST + " /dev/imageConverter " + HTTP_VERSION).c_str());
         SSLClient.println((HOST + apiGateway).c_str());
-        SSLClient.println((CONTENT_TYPE + "application/json").c_str());
+        SSLClient.println((CONTENT_TYPE + "application/x-www-form-urlencoded").c_str());
         SSLClient.println((CONTENT_LENGTH + to_string(postData.size())).c_str());
         SSLClient.println(CONNECTION_CLOSE.c_str());
         SSLClient.println();
