@@ -11,10 +11,10 @@
 #define CLK 10
 #define OE   11
 #define LAT 12
-#define A   A0
-#define B   A2
-#define C   A3
-#define D   A6
+#define A   A2
+#define B   A0
+#define C   A6
+#define D   A3
 
 using namespace std;
 
@@ -25,14 +25,15 @@ string refreshToken = "AQAQL12IRdZORwdVF8sJeSiTrSNRVKbv1yZNqUFcfT6-ztpwK1gDjRFQZ
 SpotifyWiFiClient spotifyClient(clientId, clientSecret, refreshToken);
 typedef SpotifyWiFiClient::ClientType ClientType;
 
+uint8_t boardWidth = 32;
 uint8_t RGBPins[6] = { 4, 5, 6, 7, 8, 9 };
-RGBmatrixPanel matrix(A, B, C, D, CLK, LAT, OE, false, 32, RGBPins);
+RGBmatrixPanel matrix(A, B, C, D, CLK, LAT, OE, false, boardWidth, RGBPins);
 
 void setup() {
   Serial.begin(9600);
   while (!Serial); // Wait For Serial Port to Connect.
 
-  WiFiUtilities wifiCheck("Salsa", "Guacamole");
+  WiFiUtilities wifiCheck("The Force", "thisistheway");
   wifiCheck.checkWiFiModule();
   wifiCheck.connectToWiFi();
 
@@ -136,7 +137,19 @@ void getPixelsResponse(SpotifyWiFiClient &spotifyClient) {
       return;
     }
 
-    matrix.drawPixel(i / 32, i % 32, matrix.Color888(doc["r"].as< int>(), doc["g"].as< int>(), doc["b"].as< int>()));
+    int r = doc["r"].as< int>();
+    int g = doc["g"].as< int>();
+    int b = doc["b"].as< int>();
+
+    int avg = (r + g + b) / 256.0;
+
+    if (avg > 32 && avg < 64) {
+      r += 32;
+      g += 32;
+      b += 32;
+    }
+    
+    matrix.drawPixel(i / boardWidth, i % boardWidth, matrix.Color888(r, g, b, true));
     i++;
   } while (spotifyClient.SSLClient.findUntil(",", "]"));
 
