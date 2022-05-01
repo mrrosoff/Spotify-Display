@@ -18,7 +18,7 @@
 
 using namespace std;
 
-string clientId = "a9a84f65fc9f47568870f4c0c0185e3a"; 
+string clientId = "a9a84f65fc9f47568870f4c0c0185e3a";
 string clientSecret = "7cb7fe064e1844c19e87a2d475573948";
 string refreshToken = "AQAQL12IRdZORwdVF8sJeSiTrSNRVKbv1yZNqUFcfT6-ztpwK1gDjRFQZ0gQn5kBzKVL_3veFiHku1m8aDFYtThJzY9kjj3oX8_juhXTA9bn5_VSPHdqoSDPnsotBaEMkck"; 
 
@@ -141,12 +141,11 @@ void getPixelsResponse(SpotifyWiFiClient &spotifyClient) {
     int g = doc["g"].as< int>();
     int b = doc["b"].as< int>();
 
-    int avg = (r + g + b) / 256.0;
-
-    if (avg > 32 && avg < 64) {
-      r += 32;
-      g += 32;
-      b += 32;
+    int avg = (r + g + b) / 3.0;
+    if (avg > 20 && avg < 64) {
+      r += 60;
+      g += 60;
+      b += 60;
     }
     
     matrix.drawPixel(i / boardWidth, i % boardWidth, matrix.Color888(r, g, b, true));
