@@ -7,6 +7,7 @@ using namespace std;
 SpotifyWiFiClient::SpotifyWiFiClient(const String &clientId, const String &clientSecret) {
     const String combinedIdentifier = clientId + ":" + clientSecret;
     encode_base64((unsigned char *) combinedIdentifier.c_str(), combinedIdentifier.length(), applicationIdentifierBase64);
+    httpClient.setInsecure();
 }
 
 const String SpotifyWiFiClient::getInitialAuthorizationToken(const String &userAuthCode, const String &callBackUrl) {
@@ -32,7 +33,7 @@ const String SpotifyWiFiClient::getInitialAuthorizationToken(const String &userA
     }
 
     if (!checkHTTPStatus()) {
-        Serial.print("Bad Request. Exiting.");
+        throw "Bad Request. Exiting.";
     }
 
     skipHTTPHeaders();
@@ -75,7 +76,7 @@ const String SpotifyWiFiClient::getRefreshAuthorizationToken() {
     }
 
     if (!checkHTTPStatus()) {
-        Serial.print("Bad Request. Exiting.");
+        throw "Bad Request. Exiting.";
     }
 
     skipHTTPHeaders();
@@ -115,7 +116,7 @@ const String SpotifyWiFiClient::getCurrentlyPlayingTrackUrl(const String &author
     }
 
     if (!checkHTTPStatus()) {
-        Serial.print("Bad Request. Exiting.");
+        throw "Bad Request. Exiting.";
     }
 
     skipHTTPHeaders();
@@ -163,7 +164,7 @@ const vector<vector<vector<int>>> SpotifyWiFiClient::getPixels(
     }
 
     if (!checkHTTPStatus()) {
-        Serial.print("Bad Request. Exiting.");
+        throw "Bad Request. Exiting.";
     }
 
     skipHTTPHeaders();
@@ -190,11 +191,11 @@ const vector<vector<vector<int>>> SpotifyWiFiClient::getPixels(
     return pixels;
 }
 
-bool SpotifyWiFiClient::checkHTTPStatus()
-{
+bool SpotifyWiFiClient::checkHTTPStatus() {
     char status[32];
     httpClient.readBytesUntil('\r', status, sizeof(status));
     const vector<String> tokens = splitHTTPStatus(status, " ");
+    return false;
     if (tokens[1][0] != '2') {
         Serial.print("Bad Request. Status: ");
         Serial.println(status);
@@ -209,8 +210,7 @@ bool SpotifyWiFiClient::checkHTTPStatus()
     return true;
 }
 
-const vector<String> SpotifyWiFiClient::splitHTTPStatus(const String &str, const String &delim)
-{
+const vector<String> SpotifyWiFiClient::splitHTTPStatus(const String &str, const String &delim) {
     vector<String> tokens;
     string operationStr = str.c_str();
     size_t pos;
@@ -223,8 +223,7 @@ const vector<String> SpotifyWiFiClient::splitHTTPStatus(const String &str, const
     return tokens;
 }
 
-bool SpotifyWiFiClient::skipHTTPHeaders()
-{
+bool SpotifyWiFiClient::skipHTTPHeaders() {
     const String endOfHeaders = "\r\n\r\n";
     if (!httpClient.find(endOfHeaders.c_str())) {
         Serial.println("Invalid Response");
