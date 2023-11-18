@@ -3,6 +3,7 @@
 #include "base64.hpp"
 
 using namespace std;
+using namespace chrono;
 
 SpotifyWiFiClient::SpotifyWiFiClient(const String &clientId, const String &clientSecret) {
     const String combinedIdentifier = clientId + ":" + clientSecret;
@@ -15,7 +16,7 @@ const String SpotifyWiFiClient::getInitialAuthorizationToken(const String &userA
     Serial.println("Requesting OAuth Token");
 
     const String spotifyAccounts = "accounts.spotify.com";
-    const String postData = "grant_type=authorization_code&code=" + userAuthCode + "redirect_uri=" + callBackUrl;
+    const String postData = "grant_type=authorization_code&code=" + userAuthCode + "&redirect_uri=" + callBackUrl;
 
     if (httpClient.connect(spotifyAccounts.c_str(), CONNECTION_PORT)) {
         httpClient.println(POST + " /api/token " + HTTP_VERSION);
@@ -46,9 +47,12 @@ const String SpotifyWiFiClient::getInitialAuthorizationToken(const String &userA
     }
 
     const String oauthToken = doc["access_token"].as<const char *>();
-    oauthExpiryTime = time(NULL) + doc["expires_in"].as<long>() - 60;
+    auto millisecondNow = static_cast<long>(duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count());
+    oauthExpiryTime = millisecondNow + doc["expire_time"].as<long>();
     oauthRefreshToken = doc["refresh_token"].as<const char *>();
     httpClient.stop();
+
+    Serial.println("Retrieved Authorization Token: " + oauthToken);
 
     return oauthToken;
 }
@@ -80,6 +84,7 @@ const String SpotifyWiFiClient::getRefreshAuthorizationToken() {
     }
 
     skipHTTPHeaders();
+
     StaticJsonDocument<768> doc;
     DeserializationError error = deserializeJson(doc, httpClient);
     if (error) {
@@ -87,11 +92,12 @@ const String SpotifyWiFiClient::getRefreshAuthorizationToken() {
         httpClient.stop();
         throw "Error Deserializing Json For Refreshed Authorization Token";
     }
-
     const String oauthToken = doc["access_token"].as<const char *>();
-    oauthExpiryTime = time(NULL) + doc["expires_in"].as<long>() - 60;
+    oauthExpiryTime = time(nullptr) + doc["expires_in"].as<long>() - 60;
     oauthRefreshToken = doc["refresh_token"].as<const char *>();
     httpClient.stop();
+
+    Serial.println("Retrieved Authorization Token: " + oauthToken);
 
     return oauthToken;
 }
@@ -134,22 +140,24 @@ const String SpotifyWiFiClient::getCurrentlyPlayingTrackUrl(const String &author
     const String albumArtURL = doc["item"]["album"]["images"][2]["url"].as<const char *>();
     httpClient.stop();
 
+    Serial.println("Retrieved album art url: " + albumArtURL);
+
     return albumArtURL;
 }
 
-const vector<vector<vector<int>>> SpotifyWiFiClient::getPixels(
-    const String &albumArtUrl,
+void SpotifyWiFiClient::printPixels(
+    MatrixPanel_I2S_DMA *matrix,
     const int displayWidth,
-    const int displayHeight
-) {
+    const int displayHeight,
+    const String &albumArtUrl
+){
     httpClient.stop();
     Serial.println("Getting Pixels for " + albumArtUrl);
 
     const String apiGateway = "8483ycajn0.execute-api.us-west-2.amazonaws.com";
-    const String postData = "spotifyUrl=" + albumArtUrl;
+    const String postData = "spotifyUrl=" + albumArtUrl + "&newImageSize=64";
 
-    if (httpClient.connect(apiGateway.c_str(), CONNECTION_PORT))
-    {
+    if (httpClient.connect(apiGateway.c_str(), CONNECTION_PORT)) {
         httpClient.println(POST + " /dev/imageConverter " + HTTP_VERSION);
         httpClient.println(HOST + apiGateway);
         httpClient.println(CONTENT_TYPE + "application/x-www-form-urlencoded");
@@ -170,7 +178,6 @@ const vector<vector<vector<int>>> SpotifyWiFiClient::getPixels(
     skipHTTPHeaders();
     httpClient.find("[");
 
-    vector<vector<vector<int>>> pixels(displayHeight, vector<vector<int>>(displayWidth));
     int i = 0;
     do {
         StaticJsonDocument<64> doc;
@@ -181,21 +188,24 @@ const vector<vector<vector<int>>> SpotifyWiFiClient::getPixels(
             throw "Error Deserializing Json For Pixels";
         }
 
-        const vector<int> color = { doc["r"].as<int>(), doc["g"].as<int>(), doc["b"].as<int>() };
-        pixels[i / displayHeight][i % displayWidth] = color;
+        matrix->drawPixelRGB888(
+            i % displayWidth,
+            i / displayHeight,
+            doc["r"].as<uint8_t>(),
+            doc["g"].as<uint8_t>(),
+            doc["b"].as<uint8_t>()
+        );
         i++;
     }
     while (httpClient.findUntil(",", "]"));
 
     httpClient.stop();
-    return pixels;
 }
 
 bool SpotifyWiFiClient::checkHTTPStatus() {
     char status[32];
     httpClient.readBytesUntil('\r', status, sizeof(status));
     const vector<String> tokens = splitHTTPStatus(status, " ");
-    return false;
     if (tokens[1][0] != '2') {
         Serial.print("Bad Request. Status: ");
         Serial.println(status);

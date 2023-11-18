@@ -4,8 +4,10 @@
 #include <ArduinoJson.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
 
-#include <ctime>
+#include <chrono>
+#include <ratio>
 #include <string>
 #include <vector>
 
@@ -23,7 +25,7 @@ public:
     const String getInitialAuthorizationToken(const String &, const String &);
     const String getRefreshAuthorizationToken();
     const String getCurrentlyPlayingTrackUrl(const String &);
-    const std::vector<std::vector<std::vector<int>>> getPixels(const String &, int, int);
+    void printPixels(MatrixPanel_I2S_DMA *, int, int, const String &);
 
     long oauthExpiryTime = 0;
 
