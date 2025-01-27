@@ -2,7 +2,7 @@
 
 A production grade IOT product that displays your current playback on a low pixel display.
 
-![]()
+![display](./display.jpg)
 
 ## Hardware
 
