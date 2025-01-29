@@ -9,6 +9,10 @@ Restart=always
 RestartSec=1
 User=root
 ExecStart=/home/user/Spotify-Display/venv/bin/python /home/user/Spotify-Display/spotify-display.py
+Nice=-20
+CPUSchedulingPolicy=rr
+IOSchedulingClass=realtime
+IOSchedulingPriority=2
 
 [Install]
 WantedBy=multi-user.target
