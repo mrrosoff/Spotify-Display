@@ -1,12 +1,10 @@
 [Unit]
 Description=Spotify Display Service
 After=network.target
-StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 Restart=always
-RestartSec=1
 User=root
 ExecStart=/home/user/Spotify-Display/venv/bin/python /home/user/Spotify-Display/spotify-display.py
 Nice=-20
