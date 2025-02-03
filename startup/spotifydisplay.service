@@ -1,16 +1,14 @@
 [Unit]
 Description=Spotify Display Service
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 Restart=always
 User=root
 ExecStart=/home/user/Spotify-Display/venv/bin/python /home/user/Spotify-Display/spotify-display.py
-Nice=-20
-CPUSchedulingPolicy=rr
-IOSchedulingClass=realtime
-IOSchedulingPriority=2
+Nice=-10
 
 [Install]
 WantedBy=multi-user.target
