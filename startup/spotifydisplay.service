@@ -7,7 +7,6 @@ Wants=network-online.target
 Type=simple
 Restart=always
 User=root
-WorkingDirectory=/home/user/Spotify-Display
 ExecStart=/home/user/Spotify-Display/venv/bin/python /home/user/Spotify-Display/spotify-display.py
 Nice=-10
 
