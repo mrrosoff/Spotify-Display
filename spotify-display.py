@@ -15,7 +15,7 @@ from requests import RequestException
 
 import weather
 
-FONTS_DIR = os.path.join(os.path.dirname(__file__), "fonts")
+FONTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
 CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt"
 
 IDLE_TIMEOUT = 5 * 60          # switch to weather after 5 min with no track
@@ -253,12 +253,18 @@ def main():
         except (RequestException, spotipy.SpotifyException) as e:
             log(f"spotify poll failed: {type(e).__name__}: {e}")
             info = None
+        except Exception as e:
+            log(f"spotify poll unexpected: {type(e).__name__}: {e}")
+            info = None
 
         url = None
-        if info is not None and info.get("item") is not None:
-            images = info["item"]["album"]["images"]
+        item = info.get("item") if info is not None else None
+        if item is not None:
+            images = item.get("album", {}).get("images") or item.get("images") or []
             if images:
                 url = images[-1]["url"]
+            else:
+                log(f"no images on item type={item.get('type')} name={item.get('name')}")
 
         now = time.time()
 
