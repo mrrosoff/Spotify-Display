@@ -27,7 +27,7 @@ WEATHER_TTL = 1800
 WEATHER_RETRY_TTL = 120
 WEATHER_REDRAW = 30            # repaint weather view every 30s
 
-NIGHT_START_MIN = 20 * 60 + 30  # 8:30 PM -> show tomorrow's weather
+NIGHT_START_MIN = 22 * 60 + 30  # 10:30 PM -> show tomorrow's weather
 NIGHT_END_MIN = 7 * 60          # 7:00 AM
 
 DAY_BRIGHTNESS = 100
