@@ -6,7 +6,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, UnidentifiedImageError
 from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
@@ -275,8 +275,8 @@ def main():
             if url != prev_url or mode != "art":
                 try:
                     im = fetch_album_image(url)
-                except RequestException as e:
-                    log(f"art fetch failed: {type(e).__name__}: {e}")
+                except (RequestException, UnidentifiedImageError, OSError) as e:
+                    log(f"art fetch failed: {type(e).__name__}: {e} url={url}")
                 else:
                     stop_loading_anim()
                     matrix.SetImage(im)
