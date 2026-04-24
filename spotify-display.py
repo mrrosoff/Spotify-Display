@@ -164,6 +164,10 @@ def main():
     options.hardware_mapping = "regular"
     matrix = RGBMatrix(options=options)
 
+    loading_canvas = matrix.CreateFrameCanvas()
+    draw_text_centered(loading_canvas, fonts["row"], 32, 32, LABEL, "Loading")
+    matrix.SwapOnVSync(loading_canvas)
+
     sp = spotipy.Spotify(
         auth_manager=SpotifyOAuth(
             client_id="a9a84f65fc9f47568870f4c0c0185e3a",
