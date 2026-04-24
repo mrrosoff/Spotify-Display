@@ -183,7 +183,7 @@ def main():
 
     canvas = matrix.CreateFrameCanvas()
     prev_url = None
-    last_playing = time.time()
+    last_playing = 0.0
     last_weather_draw = 0.0
     mode = None
 
