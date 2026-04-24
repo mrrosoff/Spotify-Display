@@ -8,7 +8,7 @@ import requests
 
 ICONS_DIR = os.path.join(os.path.dirname(__file__), "icons")
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
-LAT, LON = 37.7605, -122.4356  # Castro/Market-ish
+LAT, LON = 32.7992898, -117.1922940
 
 CODE_ICON = {
     0: "sun", 1: "cloud_sun", 2: "cloud_sun", 3: "clouds",
