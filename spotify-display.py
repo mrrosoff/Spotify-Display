@@ -88,7 +88,11 @@ def is_night():
 
 
 def want_tomorrow():
-    return is_night()
+    # Only bump to tomorrow's forecast during the evening portion of the
+    # night window. After midnight, day_index=0 is already the day the
+    # user cares about.
+    m = datetime.now().hour * 60 + datetime.now().minute
+    return m >= NIGHT_START_MIN
 
 
 def refresh_weather(day_index):
