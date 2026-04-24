@@ -5,6 +5,7 @@ import sys
 import threading
 import time
 from datetime import datetime, timedelta
+from io import BytesIO
 
 from PIL import Image, UnidentifiedImageError
 from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
@@ -140,9 +141,9 @@ def render_weather_view(canvas, fonts, icons):
 
 
 def fetch_album_image(url):
-    with requests.get(url, stream=True, timeout=HTTP_TIMEOUT) as r:
-        r.raise_for_status()
-        return Image.open(r.raw).convert("RGB").copy()
+    r = requests.get(url, timeout=HTTP_TIMEOUT)
+    r.raise_for_status()
+    return Image.open(BytesIO(r.content)).convert("RGB")
 
 
 def main():
