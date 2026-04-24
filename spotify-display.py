@@ -19,7 +19,7 @@ import weather
 FONTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
 CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt"
 
-IDLE_TIMEOUT = 5 * 60          # switch to weather after 5 min with no track
+IDLE_TIMEOUT = 30              # switch to weather after 30s with no track
 POLL_INTERVAL = 1.0
 HTTP_TIMEOUT = (5, 10)
 
