@@ -6,7 +6,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 
-from PIL import Image, ImageDraw, UnidentifiedImageError
+from PIL import Image, UnidentifiedImageError
 from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
@@ -28,8 +28,6 @@ WEATHER_REDRAW = 30            # repaint weather view every 30s
 
 NIGHT_START_MIN = 20 * 60 + 30  # 8:30 PM -> show tomorrow's weather
 NIGHT_END_MIN = 7 * 60          # 7:00 AM
-
-SPOTIFY_GREEN = (30, 215, 96)
 
 
 weather_cache = {"data": None, "last_fetch": 0.0, "day_index": None}
@@ -78,56 +76,6 @@ def draw_icon(canvas, pixels, x0, y0, color):
         for x, on in enumerate(row):
             if on:
                 canvas.SetPixel(x0 + x, y0 + y, color.red, color.green, color.blue)
-
-
-def make_spotify_logo(size=32):
-    """Render a simplified Spotify glyph: green circle with three black arcs."""
-    img = Image.new("RGB", (size, size), (0, 0, 0))
-    d = ImageDraw.Draw(img)
-    d.ellipse([0, 0, size - 1, size - 1], fill=SPOTIFY_GREEN)
-    # (top_y_frac, width_frac, height_frac, thickness)
-    arcs = [
-        (0.18, 0.72, 0.40, 3),
-        (0.34, 0.58, 0.34, 2),
-        (0.50, 0.44, 0.26, 2),
-    ]
-    for top_f, w_f, h_f, thick in arcs:
-        w = int(size * w_f)
-        h = int(size * h_f)
-        x0 = (size - w) // 2
-        y0 = int(size * top_f)
-        d.arc([x0, y0, x0 + w, y0 + h],
-              start=180, end=360, fill=(0, 0, 0), width=thick)
-    return img
-
-
-def paint_image(canvas, img, x0, y0):
-    px = img.load()
-    w, h = img.size
-    for y in range(h):
-        for x in range(w):
-            r, g, b = px[x, y]
-            if r or g or b:
-                canvas.SetPixel(x0 + x, y0 + y, r, g, b)
-
-
-def render_loading(canvas, fonts, logo_img, dots):
-    canvas.Clear()
-    lw, _ = logo_img.size
-    paint_image(canvas, logo_img, (64 - lw) // 2, 8)
-    text = "Loading" + "." * dots + " " * (3 - dots)
-    draw_text_centered(canvas, fonts["row"], 32, 52, LABEL, text)
-
-
-def loading_animator(matrix, fonts, logo_img, stop_event):
-    canvas = matrix.CreateFrameCanvas()
-    i = 0
-    while not stop_event.is_set():
-        render_loading(canvas, fonts, logo_img, i % 4)
-        canvas = matrix.SwapOnVSync(canvas)
-        if stop_event.wait(0.4):
-            break
-        i += 1
 
 
 def want_tomorrow():
@@ -205,7 +153,6 @@ def main():
         "row": load_font("5x7.bdf"),
     }
     icons = weather.load_icons()
-    logo_img = make_spotify_logo(32)
 
     options = RGBMatrixOptions()
     options.rows = 64
@@ -216,13 +163,6 @@ def main():
     options.limit_refresh_rate_hz = 120
     options.hardware_mapping = "regular"
     matrix = RGBMatrix(options=options)
-
-    stop_loading = threading.Event()
-    anim_thread = threading.Thread(
-        target=loading_animator, args=(matrix, fonts, logo_img, stop_loading),
-        daemon=True,
-    )
-    anim_thread.start()
 
     sp = spotipy.Spotify(
         auth_manager=SpotifyOAuth(
@@ -241,13 +181,7 @@ def main():
     prev_url = None
     last_playing = time.time()
     last_weather_draw = 0.0
-    mode = "loading"
-
-    def stop_loading_anim():
-        nonlocal mode
-        if mode == "loading":
-            stop_loading.set()
-            anim_thread.join()
+    mode = None
 
     while True:
         try:
@@ -278,7 +212,6 @@ def main():
                 except (RequestException, UnidentifiedImageError, OSError) as e:
                     log(f"art fetch failed: {type(e).__name__}: {e} url={url}")
                 else:
-                    stop_loading_anim()
                     matrix.SetImage(im)
                     prev_url = url
                     mode = "art"
@@ -286,7 +219,6 @@ def main():
         else:
             idle = now - last_playing
             if idle >= IDLE_TIMEOUT:
-                stop_loading_anim()
                 if mode != "weather" or (now - last_weather_draw) >= WEATHER_REDRAW:
                     render_weather_view(canvas, fonts, icons)
                     canvas = matrix.SwapOnVSync(canvas)
