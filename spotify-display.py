@@ -165,7 +165,7 @@ def main():
     matrix = RGBMatrix(options=options)
 
     loading_canvas = matrix.CreateFrameCanvas()
-    draw_text_centered(loading_canvas, fonts["row"], 32, 32, LABEL, "Loading")
+    draw_text_centered(loading_canvas, fonts["row"], 32, 32, LABEL, "Loading...")
     matrix.SwapOnVSync(loading_canvas)
 
     sp = spotipy.Spotify(
