@@ -30,6 +30,9 @@ WEATHER_REDRAW = 30            # repaint weather view every 30s
 NIGHT_START_MIN = 20 * 60 + 30  # 8:30 PM -> show tomorrow's weather
 NIGHT_END_MIN = 7 * 60          # 7:00 AM
 
+DAY_BRIGHTNESS = 100
+NIGHT_BRIGHTNESS = 50
+
 
 weather_cache = {"data": None, "last_fetch": 0.0, "day_index": None}
 weather_lock = threading.Lock()
@@ -79,9 +82,13 @@ def draw_icon(canvas, pixels, x0, y0, color):
                 canvas.SetPixel(x0 + x, y0 + y, color.red, color.green, color.blue)
 
 
-def want_tomorrow():
+def is_night():
     m = datetime.now().hour * 60 + datetime.now().minute
     return m >= NIGHT_START_MIN or m < NIGHT_END_MIN
+
+
+def want_tomorrow():
+    return is_night()
 
 
 def refresh_weather(day_index):
@@ -143,10 +150,7 @@ def render_weather_view(canvas, fonts, icons):
 def fetch_album_image(url):
     r = requests.get(url, timeout=HTTP_TIMEOUT)
     r.raise_for_status()
-    body = r.content
-    log(f"art resp status={r.status_code} ct={r.headers.get('content-type')} "
-        f"len={len(body)} head={body[:8].hex()}")
-    return Image.open(BytesIO(body)).convert("RGB")
+    return Image.open(BytesIO(r.content)).convert("RGB")
 
 
 def main():
@@ -157,6 +161,12 @@ def main():
         "row": load_font("5x7.bdf"),
     }
     icons = weather.load_icons()
+
+    # Force PIL to import its format plugins (JPEG/PNG/etc.) now, before
+    # RGBMatrix() drops privileges. Otherwise those imports happen lazily
+    # on first Image.open(), and the post-drop daemon user can't traverse
+    # /home/user to reach the plugin modules.
+    Image.init()
 
     options = RGBMatrixOptions()
     options.rows = 64
@@ -190,8 +200,20 @@ def main():
     last_playing = 0.0
     last_weather_draw = 0.0
     mode = None
+    current_brightness = None
 
     while True:
+        target_brightness = NIGHT_BRIGHTNESS if is_night() else DAY_BRIGHTNESS
+        if target_brightness != current_brightness:
+            matrix.brightness = target_brightness
+            current_brightness = target_brightness
+            log(f"brightness -> {target_brightness}")
+            # Force a redraw of whatever mode we're in so the new brightness
+            # takes effect immediately.
+            prev_url = None
+            mode = None
+
+
         try:
             info = sp.current_user_playing_track()
         except (RequestException, spotipy.SpotifyException) as e:
