@@ -31,7 +31,7 @@ NIGHT_START_MIN = 22 * 60 + 30  # 10:30 PM -> show tomorrow's weather
 NIGHT_END_MIN = 7 * 60          # 7:00 AM
 
 DAY_BRIGHTNESS = 100
-NIGHT_BRIGHTNESS = 50
+NIGHT_BRIGHTNESS = 40
 
 
 weather_cache = {"data": None, "last_fetch": 0.0, "day_index": None}
