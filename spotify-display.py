@@ -143,7 +143,10 @@ def render_weather_view(canvas, fonts, icons):
 def fetch_album_image(url):
     r = requests.get(url, timeout=HTTP_TIMEOUT)
     r.raise_for_status()
-    return Image.open(BytesIO(r.content)).convert("RGB")
+    body = r.content
+    log(f"art resp status={r.status_code} ct={r.headers.get('content-type')} "
+        f"len={len(body)} head={body[:8].hex()}")
+    return Image.open(BytesIO(body)).convert("RGB")
 
 
 def main():
