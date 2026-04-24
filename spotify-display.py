@@ -198,6 +198,15 @@ def fetch_album_image(url):
 
 
 def main():
+    # Load all assets from disk before constructing RGBMatrix, which drops
+    # root privileges and loses access to files under /home/user (mode 700).
+    fonts = {
+        "title": load_font("6x10.bdf"),
+        "row": load_font("5x7.bdf"),
+    }
+    icons = weather.load_icons()
+    logo_img = make_spotify_logo(32)
+
     options = RGBMatrixOptions()
     options.rows = 64
     options.cols = 64
@@ -207,13 +216,6 @@ def main():
     options.limit_refresh_rate_hz = 120
     options.hardware_mapping = "regular"
     matrix = RGBMatrix(options=options)
-
-    fonts = {
-        "title": load_font("6x10.bdf"),
-        "row": load_font("5x7.bdf"),
-    }
-    icons = weather.load_icons()
-    logo_img = make_spotify_logo(32)
 
     stop_loading = threading.Event()
     anim_thread = threading.Thread(
