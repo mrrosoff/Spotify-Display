@@ -10,7 +10,8 @@ namespace spotify {
 bool init();
 
 struct NowPlaying {
-    bool playing = false;        // true when something is currently playing
+    bool active = false;         // an item is loaded in the player (playing or paused)
+    bool paused = false;         // active && !is_playing
     std::string album_art_url;   // empty when no art available
     std::string track_name;      // for logging
 };

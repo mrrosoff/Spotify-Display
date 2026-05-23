@@ -24,4 +24,8 @@ void text_centered(
 
 void icon(Canvas *c, const XbmIcon &ic, int x0, int y0, const Color &color);
 
+// Pause icon (two vertical bars with a 1-px dark halo so it reads on any
+// background). The icon's bottom-right corner is placed at (x_right, y_bottom).
+void pause_icon(Canvas *c, int x_right, int y_bottom);
+
 }  // namespace draw

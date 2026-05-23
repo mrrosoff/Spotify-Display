@@ -120,10 +120,36 @@ int main() {
 
     auto *canvas = matrix->CreateFrameCanvas();
     string prev_art_url;
+    bool prev_paused = false;
+    img::Bitmap art_buf;  // last decoded album-art bitmap, re-blittable on pause toggle
     double last_playing = 0.0;
     double last_weather_draw = 0.0;
     Mode mode = Mode::None;
     int current_brightness = -1;
+
+    constexpr double PAUSED_DIM = 0.5;
+    constexpr int PAUSE_PADDING = 3;
+    constexpr int WIPE_STEP = 2;  // columns per frame; 64/2 = 32 frames
+
+    const auto blit_art = [&](bool paused) {
+        canvas->Clear();
+        img::draw(art_buf, canvas, 0, 0, paused ? PAUSED_DIM : 1.0);
+        if (paused) {
+            draw::pause_icon(canvas, 63 - PAUSE_PADDING, 63 - PAUSE_PADDING);
+        }
+        canvas = matrix->SwapOnVSync(canvas);
+    };
+
+    // Horizontal column wipe from the currently displayed `art_buf` to `next`.
+    // After the wipe completes, the caller should move `next` into `art_buf`.
+    const auto wipe_art = [&](const img::Bitmap &next) {
+        for (int split = WIPE_STEP; split < 64; split += WIPE_STEP) {
+            if (g_interrupted.load()) return;
+            canvas->Clear();
+            img::draw_split(art_buf, next, canvas, 0, 0, split);
+            canvas = matrix->SwapOnVSync(canvas);
+        }
+    };
 
     while (!g_interrupted.load()) {
         const int target_b = tu::is_night() ? cfg::NIGHT_BRIGHTNESS : cfg::DAY_BRIGHTNESS;
@@ -144,9 +170,13 @@ int main() {
 
         const double now = static_cast<double>(tu::now_unix());
 
-        if (np.playing && !np.album_art_url.empty()) {
+        if (np.active && !np.album_art_url.empty()) {
             last_playing = now;
-            if (np.album_art_url != prev_art_url || mode != Mode::Art) {
+            const bool url_changed = np.album_art_url != prev_art_url;
+            const bool pause_changed = np.paused != prev_paused;
+            const bool first_art = art_buf.rgb.empty() || mode != Mode::Art;
+            const bool need_fetch = url_changed || first_art;
+            if (need_fetch) {
                 string body, herr;
                 if (!http::get(
                         np.album_art_url,
@@ -157,17 +187,29 @@ int main() {
                     )) {
                     log("art fetch failed: ", herr, " url=", np.album_art_url);
                 } else {
-                    canvas->Clear();
+                    img::Bitmap fresh;
                     string derr;
-                    if (!img::decode_and_draw(body, canvas, 0, 0, 64, 64, &derr)) {
+                    if (!img::decode(body, 64, 64, &fresh, &derr)) {
                         log("art decode failed: ", derr);
                     } else {
-                        canvas = matrix->SwapOnVSync(canvas);
-                        prev_art_url = np.album_art_url;
-                        mode = Mode::Art;
+                        if (first_art) {
+                            art_buf = move(fresh);
+                            blit_art(np.paused);
+                        } else {
+                            wipe_art(fresh);
+                            art_buf = move(fresh);
+                            blit_art(np.paused);
+                        }
                         log("show art: ", np.album_art_url);
+                        prev_art_url = np.album_art_url;
+                        prev_paused = np.paused;
+                        mode = Mode::Art;
                     }
                 }
+            } else if (pause_changed) {
+                blit_art(np.paused);
+                prev_paused = np.paused;
+                log(np.paused ? "paused" : "resumed");
             }
         } else if (ok) {
             const double idle = now - last_playing;
@@ -184,6 +226,7 @@ int main() {
                     }
                     mode = Mode::Weather;
                     prev_art_url.clear();
+                    art_buf = {};
                 }
             }
         }

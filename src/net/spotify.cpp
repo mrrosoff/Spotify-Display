@@ -216,7 +216,9 @@ bool current_playback(NowPlaying *out, string *error) {
                 images = &(*im_it);
             }
         }
-        out->playing = true;
+        out->active = true;
+        const bool is_playing = j.value("is_playing", true);
+        out->paused = !is_playing;
         if (auto name_it = item_it->find("name");
             name_it != item_it->end() && name_it->is_string()) {
             out->track_name = name_it->get<string>();
