@@ -1,0 +1,3 @@
+spotify-display
+src/**/*.o
+src/third_party/stb_image.h

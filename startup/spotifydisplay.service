@@ -1,0 +1,17 @@
+[Unit]
+Description=Spotify Display Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=30
+User=root
+Nice=-10
+WorkingDirectory=/home/user/Spotify-Display
+EnvironmentFile=-/etc/spotifydisplay.env
+ExecStart=/home/user/Spotify-Display/spotify-display
+
+[Install]
+WantedBy=multi-user.target
