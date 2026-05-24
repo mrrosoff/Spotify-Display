@@ -122,6 +122,7 @@ int main() {
     string prev_art_url;
     bool prev_paused = false;
     img::Bitmap art_buf;  // last decoded album-art bitmap, re-blittable on pause toggle
+    http::Session art_session;  // reused across art fetches (Spotify CDN keep-alive)
     double last_playing = 0.0;
     double last_weather_draw = 0.0;
     Mode mode = Mode::None;
@@ -178,7 +179,7 @@ int main() {
             const bool need_fetch = url_changed || first_art;
             if (need_fetch) {
                 string body, herr;
-                if (!http::get(
+                if (!art_session.get(
                         np.album_art_url,
                         cfg::CONNECT_TIMEOUT_S,
                         cfg::READ_TIMEOUT_S,

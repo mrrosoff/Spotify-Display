@@ -16,62 +16,40 @@ size_t write_cb(char *ptr, size_t size, size_t nmemb, void *userdata) {
     return size * nmemb;
 }
 
-struct CurlDeleter {
-    void operator()(CURL *p) const {
-        if (p) curl_easy_cleanup(p);
-    }
-};
 struct SlistDeleter {
     void operator()(curl_slist *p) const {
         if (p) curl_slist_free_all(p);
     }
 };
-using CurlHandle = unique_ptr<CURL, CurlDeleter>;
 using SlistHandle = unique_ptr<curl_slist, SlistDeleter>;
 
-bool perform(
-    const string &url,
-    curl_slist *headers,
-    const string *post_body,
-    long connect_timeout_s,
-    long read_timeout_s,
-    string *body,
-    long *http_code_out,
-    string *error
-) {
-    CurlHandle curl{curl_easy_init()};
-    if (!curl) {
-        if (error) *error = "curl_easy_init failed";
-        return false;
-    }
-    body->clear();
-    char errbuf[CURL_ERROR_SIZE] = {0};
-    curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, write_cb);
-    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, body);
-    curl_easy_setopt(curl.get(), CURLOPT_CONNECTTIMEOUT, connect_timeout_s);
-    curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT, connect_timeout_s + read_timeout_s);
-    curl_easy_setopt(curl.get(), CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl.get(), CURLOPT_NOSIGNAL, 1L);
-    curl_easy_setopt(curl.get(), CURLOPT_ACCEPT_ENCODING, "");
-    curl_easy_setopt(curl.get(), CURLOPT_USERAGENT, "spotify-display/1.0");
-    curl_easy_setopt(curl.get(), CURLOPT_ERRORBUFFER, errbuf);
-    if (headers) curl_easy_setopt(curl.get(), CURLOPT_HTTPHEADER, headers);
-    if (post_body) {
-        curl_easy_setopt(curl.get(), CURLOPT_POST, 1L);
-        curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDS, post_body->c_str());
-        curl_easy_setopt(
-            curl.get(),
-            CURLOPT_POSTFIELDSIZE,
-            static_cast<long>(post_body->size())
-        );
-    }
+SlistHandle build_slist(const vector<string> &headers) {
+    curl_slist *list = nullptr;
+    for (const auto &h : headers) list = curl_slist_append(list, h.c_str());
+    return SlistHandle{list};
+}
 
-    const CURLcode rc = curl_easy_perform(curl.get());
+void apply_common(CURL *curl, const string &url, long ct, long rt, string *body, char *errbuf) {
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, body);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, ct);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, ct + rt);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "spotify-display/1.0");
+    curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
+    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
+    curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2TLS);
+}
+
+// Run a configured request and translate curl + HTTP status into bool/error.
+bool finish(CURL *curl, const char *errbuf, long *http_code_out, string *error) {
+    const CURLcode rc = curl_easy_perform(curl);
     long http_code = 0;
-    curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &http_code);
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
     if (http_code_out) *http_code_out = http_code;
-
     if (rc != CURLE_OK) {
         if (error) *error = errbuf[0] ? errbuf : curl_easy_strerror(rc);
         return false;
@@ -85,12 +63,6 @@ bool perform(
     return true;
 }
 
-SlistHandle build_slist(const vector<string> &headers) {
-    curl_slist *list = nullptr;
-    for (const auto &h : headers) list = curl_slist_append(list, h.c_str());
-    return SlistHandle{list};
-}
-
 }  // namespace
 
 void global_init() {
@@ -100,61 +72,76 @@ void global_cleanup() {
     curl_global_cleanup();
 }
 
-bool get(
-    const string &url,
-    long connect_timeout_s,
-    long read_timeout_s,
-    string *body,
-    string *error
-) {
-    return perform(
-        url, nullptr, nullptr, connect_timeout_s, read_timeout_s, body, nullptr, error
-    );
+Session::Session() : handle_(curl_easy_init()) {}
+
+Session::~Session() {
+    if (handle_) curl_easy_cleanup(static_cast<CURL *>(handle_));
 }
 
-bool get_bearer(
+bool Session::get(
+    const string &url, long ct, long rt, string *body, string *error
+) {
+    return get_bearer(url, {}, ct, rt, body, nullptr, error);
+}
+
+bool Session::get_bearer(
     const string &url,
     const string &token,
-    long connect_timeout_s,
-    long read_timeout_s,
+    long ct,
+    long rt,
     string *body,
     long *http_code,
     string *error
 ) {
-    const auto headers = build_slist({"Authorization: Bearer " + token});
-    return perform(
-        url,
-        headers.get(),
-        nullptr,
-        connect_timeout_s,
-        read_timeout_s,
-        body,
-        http_code,
-        error
-    );
+    auto *curl = static_cast<CURL *>(handle_);
+    if (!curl) {
+        if (error) *error = "session has no curl handle";
+        return false;
+    }
+    curl_easy_reset(curl);
+    body->clear();
+    char errbuf[CURL_ERROR_SIZE] = {0};
+    apply_common(curl, url, ct, rt, body, errbuf);
+    SlistHandle headers;
+    if (!token.empty()) {
+        headers = build_slist({"Authorization: Bearer " + token});
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers.get());
+    }
+    return finish(curl, errbuf, http_code, error);
 }
 
-bool post(
+bool Session::post(
     const string &url,
-    const vector<string> &headers,
+    const vector<string> &headers_in,
     const string &request_body,
-    long connect_timeout_s,
-    long read_timeout_s,
+    long ct,
+    long rt,
     string *body,
     long *http_code,
     string *error
 ) {
-    const auto h = build_slist(headers);
-    return perform(
-        url,
-        h.get(),
-        &request_body,
-        connect_timeout_s,
-        read_timeout_s,
-        body,
-        http_code,
-        error
+    auto *curl = static_cast<CURL *>(handle_);
+    if (!curl) {
+        if (error) *error = "session has no curl handle";
+        return false;
+    }
+    curl_easy_reset(curl);
+    body->clear();
+    char errbuf[CURL_ERROR_SIZE] = {0};
+    apply_common(curl, url, ct, rt, body, errbuf);
+    SlistHandle headers = build_slist(headers_in);
+    if (headers) curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers.get());
+    curl_easy_setopt(curl, CURLOPT_POST, 1L);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request_body.c_str());
+    curl_easy_setopt(
+        curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(request_body.size())
     );
+    return finish(curl, errbuf, http_code, error);
+}
+
+bool get(const string &url, long ct, long rt, string *body, string *error) {
+    Session s;
+    return s.get(url, ct, rt, body, error);
 }
 
 }  // namespace http
