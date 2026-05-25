@@ -26,8 +26,13 @@ extern atomic<bool> g_interrupted;  // defined in main.cpp
 namespace {
 
 // Persistent session for open-meteo polls. Reused across refreshes so TCP+TLS
-// stays warm between weather fetches.
-http::Session http_session;
+// stays warm between weather fetches. Lazy function-local static so the curl
+// handle is created AFTER curl_global_init() — not before main() during
+// static init.
+http::Session &session() {
+    static http::Session s;
+    return s;
+}
 
 // Caller must hold caches::mtx.
 void schedule_retry(double &last_fetch) {
@@ -58,7 +63,7 @@ string forecast_url() {
 bool refresh_weather(int day_index) {
     const double t0 = tu::monotonic();
     string body, err;
-    if (!http_session.get(
+    if (!session().get(
             forecast_url(),
             cfg::CONNECT_TIMEOUT_S,
             cfg::READ_TIMEOUT_S,

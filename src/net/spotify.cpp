@@ -34,8 +34,13 @@ double access_token_expires_at = 0.0;  // unix seconds
 
 // Single persistent HTTP session for token refresh + playback polls. All
 // Spotify calls hit api.spotify.com / accounts.spotify.com — reuse keeps
-// TCP + TLS warm so we don't redo a full handshake every poll.
-http::Session http_session;
+// TCP + TLS warm so we don't redo a full handshake every poll. Lazy
+// function-local static so the curl handle is created AFTER
+// curl_global_init() — not before main() during static init.
+http::Session &session() {
+    static http::Session s;
+    return s;
+}
 
 string env_or(const char *name, string_view fallback) {
     const char *v = getenv(name);
@@ -99,7 +104,7 @@ bool refresh_access_token() {
     string resp, err;
     long code = 0;
     const double t0 = tu::monotonic();
-    if (!http_session.post(
+    if (!session().post(
             TOKEN_URL,
             headers,
             body,
@@ -179,7 +184,7 @@ bool current_playback(NowPlaying *out, string *error) {
     }
     string body, err;
     long code = 0;
-    if (!http_session.get_bearer(
+    if (!session().get_bearer(
             NOW_PLAYING_URL,
             token,
             cfg::CONNECT_TIMEOUT_S,
