@@ -50,6 +50,9 @@ void apply_common(CURL *curl, const string &url, long ct, long rt, string *body,
     // is delayed long enough that some servers drop the connection.
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "spotify-display/1.0");
     curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
+    // Temporary: dump TLS / HTTP phase trace to stderr so we can see where
+    // time is going inside calls that fail mid-handshake.
+    curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 }
 
 // Run a configured request and translate curl + HTTP status into bool/error.
