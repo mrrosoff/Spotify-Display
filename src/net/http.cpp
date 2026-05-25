@@ -37,6 +37,12 @@ void apply_common(CURL *curl, const string &url, long ct, long rt, string *body,
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, ct + rt);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
+    // Force HTTP/1.1. Default would ALPN-negotiate HTTP/2 against
+    // Cloudflare-fronted endpoints (like accounts.spotify.com), and HTTP/2's
+    // stricter stream timing causes the server to close on us mid-write when
+    // the matrix RT thread is starving the kernel. Python's requests is
+    // HTTP/1.1-only and works on this hardware; matching that.
+    curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "spotify-display/1.0");
     curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
 }
