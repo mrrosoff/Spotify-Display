@@ -43,6 +43,11 @@ void apply_common(CURL *curl, const string &url, long ct, long rt, string *body,
     // the matrix RT thread is starving the kernel. Python's requests is
     // HTTP/1.1-only and works on this hardware; matching that.
     curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+    // libcurl will otherwise add 'Expect: 100-continue' on POSTs with HTTP/1.1
+    // and stall up to 1s waiting for the server's 100 response before sending
+    // the body. Python's requests doesn't do this; matching that behavior
+    // avoids the stall on starved-CPU TLS handshakes where the 100 response
+    // is delayed long enough that some servers drop the connection.
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "spotify-display/1.0");
     curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
 }
@@ -149,8 +154,10 @@ bool Session::post(
     body->clear();
     char errbuf[CURL_ERROR_SIZE] = {0};
     apply_common(curl, url, ct, rt, body, errbuf);
-    SlistHandle headers = build_slist(headers_in);
-    if (headers) curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers.get());
+    vector<string> all_headers = headers_in;
+    all_headers.emplace_back("Expect:");  // suppress Expect: 100-continue
+    SlistHandle headers = build_slist(all_headers);
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers.get());
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request_body.c_str());
     curl_easy_setopt(
