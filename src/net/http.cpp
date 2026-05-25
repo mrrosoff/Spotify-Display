@@ -43,6 +43,12 @@ void apply_common(CURL *curl, const string &url, long ct, long rt, string *body,
     // the matrix RT thread is starving the kernel. Python's requests is
     // HTTP/1.1-only and works on this hardware; matching that.
     curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+    // Force IPv4. Brother's network's IPv6 path is unreliable: TCP connects
+    // and TLS completes, but the socket dies before we can write the HTTP
+    // request, surfacing as 'getpeername(): Transport endpoint is not
+    // connected' / 'Send failure: Broken pipe'. accounts.spotify.com has
+    // AAAA records that curl will prefer otherwise.
+    curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
     // libcurl will otherwise add 'Expect: 100-continue' on POSTs with HTTP/1.1
     // and stall up to 1s waiting for the server's 100 response before sending
     // the body. Python's requests doesn't do this; matching that behavior
@@ -50,9 +56,6 @@ void apply_common(CURL *curl, const string &url, long ct, long rt, string *body,
     // is delayed long enough that some servers drop the connection.
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "spotify-display/1.0");
     curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
-    // Temporary: dump TLS / HTTP phase trace to stderr so we can see where
-    // time is going inside calls that fail mid-handshake.
-    curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 }
 
 // Run a configured request and translate curl + HTTP status into bool/error.
