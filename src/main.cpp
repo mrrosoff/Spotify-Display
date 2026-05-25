@@ -28,10 +28,7 @@
 using namespace std;
 using logx::log;
 
-namespace fetch {
-atomic<bool> g_interrupted{false};  // shared with fetchers.cpp
-}
-using fetch::g_interrupted;
+atomic<bool> g_interrupted{false};
 
 namespace {
 
@@ -128,8 +125,6 @@ int main() {
         return 0;
     }
 
-    thread weather_thread(fetch::weather_loop);
-
     auto *canvas = matrix->CreateFrameCanvas();
     string prev_art_url;
     bool prev_paused = false;
@@ -180,6 +175,10 @@ int main() {
         if (!ok) {
             log("spotify poll failed: ", err);
         }
+
+        // Serialize all network work on one thread — weather only ticks
+        // when its TTL has elapsed, so this is a cheap no-op most iterations.
+        fetch::weather_tick();
 
         const double now = static_cast<double>(tu::now_unix());
 
@@ -247,7 +246,6 @@ int main() {
         this_thread::sleep_for(cfg::POLL_INTERVAL);
     }
 
-    weather_thread.join();
     matrix->Clear();
     matrix.reset();
     http::global_cleanup();

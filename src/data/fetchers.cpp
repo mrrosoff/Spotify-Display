@@ -8,20 +8,15 @@
 
 #include <nlohmann/json.hpp>
 
-#include <atomic>
-#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <mutex>
-#include <thread>
 
 using namespace std;
 using logx::log;
 using nlohmann::json;
 
 namespace fetch {
-
-extern atomic<bool> g_interrupted;  // defined in main.cpp
 
 namespace {
 
@@ -116,24 +111,17 @@ bool refresh_weather(int day_index) {
     }
 }
 
-void weather_loop() {
-    while (!g_interrupted.load()) {
-        const int desired = tu::desired_day_index();
-        double age;
-        int cached_day;
-        {
-            lock_guard lg(caches::mtx);
-            age = static_cast<double>(tu::now_unix()) - caches::weather.last_fetch;
-            cached_day = caches::weather.day_index;
-        }
-        if (cached_day != desired || age >= cfg::WEATHER_TTL.count()) {
-            refresh_weather(desired);
-        }
-        // Sleep in small chunks so SIGTERM exits promptly.
-        const auto deadline = chrono::steady_clock::now() + cfg::WEATHER_LOOP_INTERVAL;
-        while (!g_interrupted.load() && chrono::steady_clock::now() < deadline) {
-            this_thread::sleep_for(chrono::milliseconds{200});
-        }
+void weather_tick() {
+    const int desired = tu::desired_day_index();
+    double age;
+    int cached_day;
+    {
+        lock_guard lg(caches::mtx);
+        age = static_cast<double>(tu::now_unix()) - caches::weather.last_fetch;
+        cached_day = caches::weather.day_index;
+    }
+    if (cached_day != desired || age >= cfg::WEATHER_TTL.count()) {
+        refresh_weather(desired);
     }
 }
 

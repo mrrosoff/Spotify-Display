@@ -6,8 +6,9 @@ namespace fetch {
 // cache is missing, stale, or for the wrong day. Returns true on success.
 bool refresh_weather(int day_index);
 
-// Pump function for the background weather thread. Sleeps between checks
-// and refreshes when overdue.
-void weather_loop();
+// Inspect the weather cache and, if it's missing/stale/wrong-day, do a
+// refresh. Otherwise no-op. Called from the main loop so weather and
+// Spotify never make concurrent network calls on this single-core box.
+void weather_tick();
 
 }  // namespace fetch
