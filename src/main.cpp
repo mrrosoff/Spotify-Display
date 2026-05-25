@@ -86,6 +86,11 @@ enum class Mode { None, Art, Weather };
 }  // namespace
 
 int main() {
+    // Curl can otherwise deliver SIGPIPE on a broken connection and kill the
+    // process. We dropped CURLOPT_NOSIGNAL so curl uses SIGALRM for timeouts;
+    // this is the matching half that keeps SIGPIPE from being fatal.
+    signal(SIGPIPE, SIG_IGN);
+
     boot_grace();
     http::global_init();
 

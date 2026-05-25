@@ -36,7 +36,6 @@ void apply_common(CURL *curl, const string &url, long ct, long rt, string *body,
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, ct);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, ct + rt);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
     curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "spotify-display/1.0");
     curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);

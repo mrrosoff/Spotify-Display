@@ -10,7 +10,7 @@ inline constexpr double LAT = 32.7992898;
 inline constexpr double LON = -117.1922940;
 
 // Spotify polling
-inline constexpr auto POLL_INTERVAL = std::chrono::milliseconds{1000};
+inline constexpr auto POLL_INTERVAL = std::chrono::milliseconds{5000};
 inline constexpr auto IDLE_TIMEOUT = std::chrono::seconds{30};
 
 // Token refresh: refresh ~5 min before expiry
@@ -29,9 +29,13 @@ inline constexpr int NIGHT_END_MIN = 7 * 60;          // 7:00 AM
 inline constexpr int DAY_BRIGHTNESS = 100;
 inline constexpr int NIGHT_BRIGHTNESS = 40;
 
-// HTTP
-inline constexpr long CONNECT_TIMEOUT_S = 5;
-inline constexpr long READ_TIMEOUT_S = 10;
+// HTTP. The matrix's realtime render thread starves the kernel and
+// userspace work on a Pi Zero W, so TLS handshakes and reads that
+// normally take ms can stretch into the 10–20s range. These match
+// Muni-Display's effective tolerance; tighter values made first-call
+// handshakes time out under matrix load.
+inline constexpr long CONNECT_TIMEOUT_S = 30;
+inline constexpr long READ_TIMEOUT_S = 60;
 
 // Fail threshold before showing "Error" red on weather screen.
 inline constexpr int FAIL_THRESHOLD = 5;
