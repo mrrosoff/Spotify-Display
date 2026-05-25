@@ -228,7 +228,10 @@ int main() {
                 prev_paused = np.paused;
                 log(np.paused ? "paused" : "resumed");
             }
-        } else if (ok) {
+        } else {
+            // Treat Spotify network failures the same as "nothing playing" —
+            // fall through to weather so the display isn't stuck on "Loading"
+            // when the API is unreachable.
             const double idle = now - last_playing;
             if (idle >= cfg::IDLE_TIMEOUT.count()) {
                 const bool need_redraw =
