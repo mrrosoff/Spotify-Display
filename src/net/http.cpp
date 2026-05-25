@@ -69,10 +69,25 @@ void global_cleanup() {
     curl_global_cleanup();
 }
 
-Session::Session() : handle_(curl_easy_init()) {}
+Session::Session(std::chrono::seconds max_age)
+    : handle_(curl_easy_init()),
+      created_at_(std::chrono::steady_clock::now()),
+      max_age_(max_age) {}
 
 Session::~Session() {
     if (handle_) curl_easy_cleanup(static_cast<CURL *>(handle_));
+}
+
+void Session::reset() {
+    if (handle_) curl_easy_cleanup(static_cast<CURL *>(handle_));
+    handle_ = curl_easy_init();
+    created_at_ = std::chrono::steady_clock::now();
+}
+
+void Session::ensure_fresh() {
+    if (max_age_.count() <= 0) return;
+    if (std::chrono::steady_clock::now() - created_at_ < max_age_) return;
+    reset();
 }
 
 bool Session::get(
@@ -90,6 +105,7 @@ bool Session::get_bearer(
     long *http_code,
     string *error
 ) {
+    ensure_fresh();
     auto *curl = static_cast<CURL *>(handle_);
     if (!curl) {
         if (error) *error = "session has no curl handle";
@@ -117,6 +133,7 @@ bool Session::post(
     long *http_code,
     string *error
 ) {
+    ensure_fresh();
     auto *curl = static_cast<CURL *>(handle_);
     if (!curl) {
         if (error) *error = "session has no curl handle";

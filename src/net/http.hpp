@@ -1,23 +1,36 @@
 #pragma once
 
+#include <chrono>
 #include <string>
 #include <vector>
 
 namespace http {
 
 // A persistent HTTP session that reuses a single curl handle. Reuse buys us
-// keep-alive TCP, cached TLS session resumption, cached DNS, and HTTP/2
-// multiplexing — collectively the difference between a cheap poll and a
-// full-TLS-handshake-per-second.
+// keep-alive TCP, cached TLS session resumption, and cached DNS —
+// collectively the difference between a cheap poll and a full-TLS-handshake-
+// per-second.
+//
+// The handle is recycled (destroyed + re-created) after `max_age` to avoid
+// long-lived state going stale: middleboxes / load balancers may rotate or
+// silently kill connections we still think are alive, leading to wedged
+// state that survives across requests. Periodic recycling forces a fresh
+// connection, DNS lookup, and TLS handshake.
 //
 // Not thread-safe. Each thread/caller should own its own Session, and
 // connection reuse only applies to repeated calls to the same host.
 class Session {
 public:
-    Session();
+    explicit Session(
+        std::chrono::seconds max_age = std::chrono::minutes{30}
+    );
     ~Session();
     Session(const Session &) = delete;
     Session &operator=(const Session &) = delete;
+
+    // Destroy the underlying curl handle and create a fresh one. Callers
+    // can use this after an error to defensively clear any wedged state.
+    void reset();
 
     bool get(
         const std::string &url,
@@ -50,6 +63,9 @@ public:
 
 private:
     void *handle_;  // CURL*
+    std::chrono::steady_clock::time_point created_at_;
+    std::chrono::seconds max_age_;
+    void ensure_fresh();
 };
 
 // One-shot helpers — fresh handle per call. Use Session for anything polled.

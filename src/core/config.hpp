@@ -10,7 +10,7 @@ inline constexpr double LAT = 32.7992898;
 inline constexpr double LON = -117.1922940;
 
 // Spotify polling
-inline constexpr auto POLL_INTERVAL = std::chrono::milliseconds{30000};
+inline constexpr auto POLL_INTERVAL = std::chrono::milliseconds{120000};
 inline constexpr auto IDLE_TIMEOUT = std::chrono::seconds{30};
 
 // Token refresh: refresh ~5 min before expiry
