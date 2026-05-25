@@ -34,8 +34,8 @@ inline constexpr int NIGHT_BRIGHTNESS = 40;
 // normally take ms can stretch into the 10–20s range. These match
 // Muni-Display's effective tolerance; tighter values made first-call
 // handshakes time out under matrix load.
-inline constexpr long CONNECT_TIMEOUT_S = 30;
-inline constexpr long READ_TIMEOUT_S = 60;
+inline constexpr long CONNECT_TIMEOUT_S = 60;
+inline constexpr long READ_TIMEOUT_S = 120;
 
 // Fail threshold before showing "Error" red on weather screen.
 inline constexpr int FAIL_THRESHOLD = 5;
