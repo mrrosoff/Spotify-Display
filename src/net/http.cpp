@@ -3,8 +3,6 @@
 #include <curl/curl.h>
 
 #include <chrono>
-#include <cstdio>
-#include <ctime>
 #include <memory>
 
 using namespace std;
@@ -26,26 +24,6 @@ struct SlistDeleter {
 };
 using SlistHandle = unique_ptr<curl_slist, SlistDeleter>;
 
-int debug_cb(CURL *, curl_infotype type, char *data, size_t size, void *) {
-    if (type != CURLINFO_TEXT) return 0;
-    const auto now = chrono::system_clock::now();
-    const auto t = chrono::system_clock::to_time_t(now);
-    const auto ms = chrono::duration_cast<chrono::milliseconds>(
-                        now.time_since_epoch()
-                    )
-                        .count() %
-                    1000;
-    tm tmv{};
-    localtime_r(&t, &tmv);
-    char ts[16];
-    strftime(ts, sizeof(ts), "%H:%M:%S", &tmv);
-    string line(data, size);
-    while (!line.empty() && (line.back() == '\n' || line.back() == '\r'))
-        line.pop_back();
-    fprintf(stderr, "[%s.%03ld] curl: %s\n", ts, static_cast<long>(ms), line.c_str());
-    return 0;
-}
-
 SlistHandle build_slist(const vector<string> &headers) {
     curl_slist *list = nullptr;
     for (const auto &h : headers) list = curl_slist_append(list, h.c_str());
@@ -60,6 +38,13 @@ void apply_common(CURL *curl, const string &url, long ct, long rt, string *body,
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, ct + rt);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
+    // Use the hashed CA directory instead of the single ~200KB bundle file
+    // (Debian's default for libcurl). With the bundle, every fresh easy handle
+    // re-parses 130+ CA certs into a new SSL_CTX — that was costing ~1.4s of
+    // user CPU per call on a Pi Zero. With the directory, OpenSSL hash-lookups
+    // only the specific issuer needed to verify the server's chain.
+    curl_easy_setopt(curl, CURLOPT_CAINFO, nullptr);
+    curl_easy_setopt(curl, CURLOPT_CAPATH, "/etc/ssl/certs");
     // Force HTTP/1.1. Default would ALPN-negotiate HTTP/2 against
     // Cloudflare-fronted endpoints (like accounts.spotify.com), and HTTP/2's
     // stricter stream timing causes the server to close on us mid-write when
@@ -79,8 +64,6 @@ void apply_common(CURL *curl, const string &url, long ct, long rt, string *body,
     // is delayed long enough that some servers drop the connection.
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "spotify-display/1.0");
     curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
-    curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
-    curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, debug_cb);
 }
 
 // Run a configured request and translate curl + HTTP status into bool/error.
