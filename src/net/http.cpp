@@ -2,6 +2,9 @@
 
 #include <curl/curl.h>
 
+#include <chrono>
+#include <cstdio>
+#include <ctime>
 #include <memory>
 
 using namespace std;
@@ -22,6 +25,26 @@ struct SlistDeleter {
     }
 };
 using SlistHandle = unique_ptr<curl_slist, SlistDeleter>;
+
+int debug_cb(CURL *, curl_infotype type, char *data, size_t size, void *) {
+    if (type != CURLINFO_TEXT) return 0;
+    const auto now = chrono::system_clock::now();
+    const auto t = chrono::system_clock::to_time_t(now);
+    const auto ms = chrono::duration_cast<chrono::milliseconds>(
+                        now.time_since_epoch()
+                    )
+                        .count() %
+                    1000;
+    tm tmv{};
+    localtime_r(&t, &tmv);
+    char ts[16];
+    strftime(ts, sizeof(ts), "%H:%M:%S", &tmv);
+    string line(data, size);
+    while (!line.empty() && (line.back() == '\n' || line.back() == '\r'))
+        line.pop_back();
+    fprintf(stderr, "[%s.%03ld] curl: %s\n", ts, static_cast<long>(ms), line.c_str());
+    return 0;
+}
 
 SlistHandle build_slist(const vector<string> &headers) {
     curl_slist *list = nullptr;
@@ -57,6 +80,7 @@ void apply_common(CURL *curl, const string &url, long ct, long rt, string *body,
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "spotify-display/1.0");
     curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
     curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+    curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, debug_cb);
 }
 
 // Run a configured request and translate curl + HTTP status into bool/error.
