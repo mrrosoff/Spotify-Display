@@ -38,8 +38,12 @@ void weather(Canvas *canvas, const Fonts &fonts, const map<string, XbmIcon> &ico
         fails = caches::weather.consecutive_failures;
     }
 
-    const auto date = tu::month_day_for(day_index);
+    const auto date = tu::month_day_for(0);
     draw::text_top(canvas, fonts.title, 2, 1, colors::GREY, date);
+    if (day_index == 1) {
+        const int dw = draw::text_width(fonts.title, date);
+        draw::text_top(canvas, fonts.dir, 2 + dw + 2, 4, colors::DIM, "+1");
+    }
     const auto clock = tu::clock_hhmm();
     const int cw = draw::text_width(fonts.dir, clock);
     draw::text_top(canvas, fonts.dir, 63 - cw, 4, colors::LABEL, clock);
