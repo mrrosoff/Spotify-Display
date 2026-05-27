@@ -71,9 +71,6 @@ unique_ptr<rgb_matrix::RGBMatrix> create_matrix() {
     options.parallel = 1;
     options.hardware_mapping = "regular";
     options.brightness = cfg::DAY_BRIGHTNESS;
-    options.pwm_bits = 8;
-    options.pwm_dither_bits = 0;
-    options.limit_refresh_rate_hz = 100;
 
     rgb_matrix::RuntimeOptions runtime;
     runtime.gpio_slowdown = 1;
