@@ -66,22 +66,17 @@ void weather(Canvas *canvas, const Fonts &fonts, const map<string, XbmIcon> &ico
     }
     auto word = string(word_for_code(data.code));
     tu::to_upper(word);
+    draw::text_centered(canvas, fonts.row, 32, 55, colors::LABEL, word);
     if (day_index == 1) {
-        constexpr int PLUS_W = 3;
-        constexpr int PLUS_GAP = 2;
         const int ww = draw::text_width(fonts.row, word);
-        const int x0 = 32 - (ww + PLUS_GAP + PLUS_W) / 2;
-        draw::text_top(canvas, fonts.row, x0, 55, colors::LABEL, word);
-        const int px = x0 + ww + PLUS_GAP;
-        const int py = 58;
+        const int px = 32 + ww / 2 + 1;
+        const int py = 52;
         const auto &c = colors::LABEL;
         canvas->SetPixel(px + 1, py + 0, c.r, c.g, c.b);
         canvas->SetPixel(px + 0, py + 1, c.r, c.g, c.b);
         canvas->SetPixel(px + 1, py + 1, c.r, c.g, c.b);
         canvas->SetPixel(px + 2, py + 1, c.r, c.g, c.b);
         canvas->SetPixel(px + 1, py + 2, c.r, c.g, c.b);
-    } else {
-        draw::text_centered(canvas, fonts.row, 32, 55, colors::LABEL, word);
     }
 
     constexpr int rx = 41;
