@@ -43,11 +43,6 @@ inline constexpr int FAIL_THRESHOLD = 5;
 // Boot grace before matrix init (keeps SSH responsive on fresh boot).
 inline constexpr auto BOOT_GRACE = std::chrono::seconds{60};
 
-// After matrix init + loading screen, wait this long before the first network
-// call. Gives WiFi / DHCP / DNS room to settle even when boot grace was
-// already past on launch.
-inline constexpr auto NETWORK_GRACE = std::chrono::seconds{30};
-
 // Default Spotify app credentials. Override at runtime with
 // SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET.
 inline constexpr std::string_view DEFAULT_CLIENT_ID =

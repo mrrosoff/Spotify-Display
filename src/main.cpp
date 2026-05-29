@@ -116,19 +116,6 @@ int main() {
     render::loading(loading_canvas, fonts);
     matrix->SwapOnVSync(loading_canvas);
 
-    // Network grace — let WiFi/DHCP/DNS finalize before any HTTPS calls.
-    // Matrix is already showing "Loading..." so the screen isn't blank.
-    log("network grace: holding fetches for ",
-        static_cast<int>(cfg::NETWORK_GRACE.count()), "s");
-    const auto deadline = chrono::steady_clock::now() + cfg::NETWORK_GRACE;
-    while (!g_interrupted.load() && chrono::steady_clock::now() < deadline) {
-        this_thread::sleep_for(chrono::milliseconds{200});
-    }
-    if (g_interrupted.load()) {
-        matrix->Clear();
-        return 0;
-    }
-
     auto *canvas = matrix->CreateFrameCanvas();
     string prev_art_url;
     bool prev_paused = false;
