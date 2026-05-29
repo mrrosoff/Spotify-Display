@@ -57,6 +57,13 @@ void apply_common(CURL *curl, const string &url, long ct, long rt, string *body,
     // connected' / 'Send failure: Broken pipe'. accounts.spotify.com has
     // AAAA records that curl will prefer otherwise.
     curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+    // Let the OS detect half-closed connections (middlebox / LB silently
+    // dropping idle keepalives) before libcurl reuses one. Without this,
+    // a poll after a long idle gap burns through every stale pooled conn
+    // before giving up — the "Connection died, tried N times" symptom.
+    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
+    curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 30L);
+    curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 10L);
     // libcurl will otherwise add 'Expect: 100-continue' on POSTs with HTTP/1.1
     // and stall up to 1s waiting for the server's 100 response before sending
     // the body. Python's requests doesn't do this; matching that behavior

@@ -201,6 +201,9 @@ int main() {
                         &body,
                         &herr
                     )) {
+                    // Server-status errors leave the pool healthy; anything
+                    // else is transport, so recycle.
+                    if (herr.rfind("HTTP ", 0) != 0) art_session.reset();
                     log("art fetch failed: ", herr, " url=", np.album_art_url);
                 } else {
                     img::Bitmap fresh;

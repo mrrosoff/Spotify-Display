@@ -65,6 +65,9 @@ bool refresh_weather(int day_index) {
             &body,
             &err
         )) {
+        // Server-status / parse errors leave the connection healthy; anything
+        // else is a transport fault and the pooled conn may be wedged.
+        if (err.rfind("HTTP ", 0) != 0) session().reset();
         lock_guard lg(caches::mtx);
         auto &c = caches::weather;
         c.consecutive_failures++;

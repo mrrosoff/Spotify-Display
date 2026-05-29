@@ -114,6 +114,9 @@ bool refresh_access_token() {
             &code,
             &err
         )) {
+        // Server-status errors leave the connection healthy; anything else
+        // is transport, so recycle the pooled curl handle.
+        if (err.rfind("HTTP ", 0) != 0) session().reset();
         log("spotify token refresh FAILED in ", tu::monotonic() - t0, "s: ", err);
         return false;
     }
@@ -199,6 +202,9 @@ bool current_playback(NowPlaying *out, string *error) {
             lock_guard lg(mtx);
             access_token_expires_at = 0.0;
         }
+        // Server-status errors leave the connection healthy; anything else
+        // is transport, so recycle the pooled curl handle.
+        if (err.rfind("HTTP ", 0) != 0) session().reset();
         if (error) *error = err;
         return false;
     }
