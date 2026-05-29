@@ -125,14 +125,35 @@ int main() {
     double last_weather_draw = 0.0;
     Mode mode = Mode::None;
     int current_brightness = -1;
+    bool prev_night = tu::is_night();
 
     constexpr double PAUSED_DIM = 0.5;
     constexpr int PAUSE_PADDING = 3;
     constexpr int WIPE_STEP = 2;  // columns per frame; 64/2 = 32 frames
 
+    // Day/night base brightness, from the clock.
+    const auto base_brightness = [] {
+        return tu::is_night() ? cfg::NIGHT_BRIGHTNESS : cfg::DAY_BRIGHTNESS;
+    };
+    // Drive all dimming through the library's CIE-mapped SetBrightness rather
+    // than scaling RGB in software: the library scales once through its
+    // perceptual curve, avoiding the truncation/banding a raw 8-bit multiply
+    // causes in dark album art. SetBrightness applies to pixels written after
+    // the call, so set it before drawing.
+    const auto set_brightness = [&](int b) {
+        if (b == current_brightness) return;
+        matrix->SetBrightness(b);
+        current_brightness = b;
+        log("brightness -> ", b);
+    };
+
     const auto blit_art = [&](bool paused) {
+        set_brightness(
+            paused ? static_cast<int>(base_brightness() * PAUSED_DIM)
+                   : base_brightness()
+        );
         canvas->Clear();
-        img::draw(art_buf, canvas, 0, 0, paused ? PAUSED_DIM : 1.0);
+        img::draw(art_buf, canvas, 0, 0);
         if (paused) {
             draw::pause_icon(canvas, 63 - PAUSE_PADDING, 63 - PAUSE_PADDING);
         }
@@ -142,6 +163,7 @@ int main() {
     // Horizontal column wipe from the currently displayed `art_buf` to `next`.
     // After the wipe completes, the caller should move `next` into `art_buf`.
     const auto wipe_art = [&](const img::Bitmap &next) {
+        set_brightness(base_brightness());  // wipe is a playing transition
         for (int split = WIPE_STEP; split < 64; split += WIPE_STEP) {
             if (g_interrupted.load()) return;
             canvas->Clear();
@@ -151,11 +173,12 @@ int main() {
     };
 
     while (!g_interrupted.load()) {
-        const int target_b = tu::is_night() ? cfg::NIGHT_BRIGHTNESS : cfg::DAY_BRIGHTNESS;
-        if (target_b != current_brightness) {
-            matrix->SetBrightness(target_b);
-            current_brightness = target_b;
-            log("brightness -> ", target_b);
+        const bool night = tu::is_night();
+        if (night != prev_night) {
+            prev_night = night;
+            log("day/night -> ", night ? "night" : "day");
+            // Force a redraw so the new base brightness takes effect on screen;
+            // the draw paths apply it via set_brightness.
             prev_art_url.clear();
             mode = Mode::None;
         }
@@ -227,6 +250,7 @@ int main() {
                     mode != Mode::Weather ||
                     (now - last_weather_draw) >= cfg::WEATHER_REDRAW.count();
                 if (need_redraw) {
+                    set_brightness(base_brightness());
                     render::weather(canvas, fonts, icons);
                     canvas = matrix->SwapOnVSync(canvas);
                     last_weather_draw = now;

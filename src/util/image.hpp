@@ -24,15 +24,9 @@ bool decode(
     std::string *error
 );
 
-// Blit a bitmap to the canvas at (x0, y0), multiplying each channel by
-// `brightness` (clamped to [0, 1]). brightness=1.0 is the full-color blit.
-void draw(
-    const Bitmap &bm,
-    rgb_matrix::Canvas *canvas,
-    int x0,
-    int y0,
-    double brightness
-);
+// Blit a bitmap to the canvas at (x0, y0) at full color. Dimming is handled
+// by the matrix's CIE-mapped SetBrightness, not by scaling RGB here.
+void draw(const Bitmap &bm, rgb_matrix::Canvas *canvas, int x0, int y0);
 
 // Composite two same-size bitmaps onto the canvas: columns [0, split) come
 // from `right` (the new image), columns [split, width) come from `left` (the

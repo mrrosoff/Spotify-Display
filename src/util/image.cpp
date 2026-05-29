@@ -49,17 +49,11 @@ bool decode(
     return true;
 }
 
-void draw(
-    const Bitmap &bm, rgb_matrix::Canvas *canvas, int x0, int y0, double brightness
-) {
-    brightness = clamp(brightness, 0.0, 1.0);
+void draw(const Bitmap &bm, rgb_matrix::Canvas *canvas, int x0, int y0) {
     for (int y = 0; y < bm.height; ++y) {
         for (int x = 0; x < bm.width; ++x) {
             const uint8_t *p = bm.rgb.data() + (y * bm.width + x) * 3;
-            const auto r = static_cast<uint8_t>(p[0] * brightness);
-            const auto g = static_cast<uint8_t>(p[1] * brightness);
-            const auto b = static_cast<uint8_t>(p[2] * brightness);
-            canvas->SetPixel(x0 + x, y0 + y, r, g, b);
+            canvas->SetPixel(x0 + x, y0 + y, p[0], p[1], p[2]);
         }
     }
 }
