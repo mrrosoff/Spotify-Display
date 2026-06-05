@@ -71,9 +71,13 @@ unique_ptr<rgb_matrix::RGBMatrix> create_matrix() {
     options.parallel = 1;
     options.hardware_mapping = "regular";
     options.brightness = cfg::DAY_BRIGHTNESS;
+    // Tuned on the Pi Zero for a steady, flicker-free panel (measured):
+    options.pwm_lsb_nanoseconds = 70;     // shorter base bit-time -> high raw refresh (~130Hz)
+    options.limit_refresh_rate_hz = 120;  // cap below the ceiling so every frame is uniform (kills dips)
+    options.disable_busy_waiting = true;  // nanosleep vs spin: frees the single core for the fetcher thread
 
     rgb_matrix::RuntimeOptions runtime;
-    runtime.gpio_slowdown = 1;
+    runtime.gpio_slowdown = 0;            // Pi Zero is slow enough; 0 gives more refresh headroom
 
     return unique_ptr<rgb_matrix::RGBMatrix>(
         rgb_matrix::RGBMatrix::CreateFromOptions(options, runtime)
