@@ -23,6 +23,14 @@ void loading(Canvas *canvas, const Fonts &fonts) {
     draw::text_centered(canvas, fonts.row, 32, 32, colors::LABEL, "Loading...");
 }
 
+void reauth(Canvas *canvas, const Fonts &fonts) {
+    canvas->Clear();
+    draw::text_centered(canvas, fonts.title, 32, 14, colors::SPOTIFY, "Spotify");
+    draw::text_centered(canvas, fonts.row, 32, 30, colors::LABEL, "Reconnect");
+    draw::text_centered(canvas, fonts.row, 32, 40, colors::LABEL, "Needed");
+    draw::text_centered(canvas, fonts.dir, 32, 56, colors::GREY, "maxrosoff.com");
+}
+
 void weather(Canvas *canvas, const Fonts &fonts, const map<string, XbmIcon> &icons) {
     canvas->Clear();
 

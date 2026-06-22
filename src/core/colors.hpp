@@ -15,6 +15,7 @@ inline const Color YELLOW       {255, 200,   0};
 inline const Color RED          {255,  80,  80};
 inline const Color ICON         {180, 200, 230};
 inline const Color PRECIP_BLUE  {120, 170, 220};
+inline const Color SPOTIFY      { 30, 215,  96};
 // clang-format on
 
 }  // namespace colors

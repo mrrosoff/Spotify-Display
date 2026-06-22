@@ -22,20 +22,17 @@ namespace {
 constexpr const char *NOW_PLAYING_URL =
     "https://api.spotify.com/v1/me/player/currently-playing";
 
-// State guarded by mtx — accessed from the polling thread only today, but
-// keeping the discipline mirrors Muni's cache pattern.
+// State guarded by mtx.
 mutex mtx;
 string token_url;
 string device_token;
 string access_token;
 double access_token_expires_at = 0.0;  // unix seconds
-double next_token_attempt_at = 0.0;    // monotonic seconds; cooldown gate
+double next_token_attempt_at = 0.0;    // monotonic seconds; retry cooldown
+bool reauth_needed = false;            // broker last returned 503
 
-// Single persistent HTTP session for token refresh + playback polls. All
-// Spotify calls hit api.spotify.com / accounts.spotify.com — reuse keeps
-// TCP + TLS warm so we don't redo a full handshake every poll. Lazy
-// function-local static so the curl handle is created AFTER
-// curl_global_init() — not before main() during static init.
+// Reused across polls to keep TCP + TLS warm. Lazy function-local static so the
+// curl handle is created after curl_global_init(), not during static init.
 http::Session &session() {
     static http::Session s;
     return s;
@@ -46,8 +43,7 @@ string env_or(const char *name, string_view fallback) {
     return (v && *v) ? string(v) : string(fallback);
 }
 
-// Caller must NOT hold mtx. Asks the broker for a fresh access token, sending
-// the per-device secret as a bearer token.
+// Caller must NOT hold mtx. Asks the broker for a fresh access token.
 bool fetch_access_token() {
     string url, dev;
     {
@@ -55,42 +51,32 @@ bool fetch_access_token() {
         url = token_url;
         dev = device_token;
     }
-    if (dev.empty()) {
-        log("spotify: SPOTIFY_DEVICE_TOKEN unset");
-        return false;
-    }
+    if (dev.empty()) return false;
+
     string resp, err;
     long code = 0;
-    const double t0 = tu::monotonic();
     if (!session().get_bearer(
             url, dev, cfg::CONNECT_TIMEOUT_S, cfg::READ_TIMEOUT_S, &resp, &code, &err
         )) {
-        // 503 means the broker has no usable refresh token — the owner must
-        // reconnect via the website (`sudo spotify`). It's recoverable, so we
-        // just wait and retry rather than treating it as fatal.
+        // 503 means the broker has no usable token until the owner reconnects
+        // via `sudo spotify`; recoverable, so just flag it (logged once).
         if (code == 503) {
-            log("spotify: broker reports reauth required — reconnect with "
-                "`sudo spotify` on maxrosoff.com");
+            lock_guard lg(mtx);
+            if (!reauth_needed) log("spotify: reauth required — run `sudo spotify`");
+            reauth_needed = true;
         } else {
-            // Server-status errors leave the connection healthy; anything else
-            // is transport, so recycle the pooled curl handle.
             if (err.rfind("HTTP ", 0) != 0) session().reset();
-            log("spotify token fetch FAILED in ", tu::monotonic() - t0, "s: ", err);
+            log("spotify token fetch failed: ", err);
         }
         return false;
     }
     try {
         const auto j = json::parse(resp);
-        const auto at = j.at("access_token").get<string>();
-        const int expires_in = j.value("expires_in", 3600);
-        {
-            lock_guard lg(mtx);
-            access_token = at;
-            access_token_expires_at =
-                static_cast<double>(tu::now_unix()) + expires_in;
-        }
-        log("spotify token fetched in ", tu::monotonic() - t0, "s (expires_in=",
-            expires_in, "s)");
+        lock_guard lg(mtx);
+        access_token = j.at("access_token").get<string>();
+        access_token_expires_at =
+            static_cast<double>(tu::now_unix()) + j.value("expires_in", 3600);
+        reauth_needed = false;
         return true;
     } catch (const exception &e) {
         log("spotify token parse failed: ", e.what());
@@ -133,6 +119,11 @@ bool init() {
         device_token = dev;
     }
     return !dev.empty();
+}
+
+bool reauth_required() {
+    lock_guard lg(mtx);
+    return reauth_needed;
 }
 
 bool current_playback(NowPlaying *out, string *error) {

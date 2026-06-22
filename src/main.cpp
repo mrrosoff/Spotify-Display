@@ -84,7 +84,7 @@ unique_ptr<rgb_matrix::RGBMatrix> create_matrix() {
     );
 }
 
-enum class Mode { None, Art, Weather };
+enum class Mode { None, Art, Weather, Reauth };
 
 }  // namespace
 
@@ -127,6 +127,8 @@ int main() {
     http::Session art_session;  // reused across art fetches (Spotify CDN keep-alive)
     double last_playing = 0.0;
     double last_weather_draw = 0.0;
+    double last_reauth_draw = 0.0;
+    string last_poll_err;
     Mode mode = Mode::None;
     int current_brightness = -1;
     bool prev_night = tu::is_night();
@@ -190,9 +192,10 @@ int main() {
         spotify::NowPlaying np;
         string err;
         const bool ok = spotify::current_playback(&np, &err);
-        if (!ok) {
+        if (!ok && err != last_poll_err) {
             log("spotify poll failed: ", err);
         }
+        last_poll_err = ok ? string() : err;
 
         // Serialize all network work on one thread — weather only ticks
         // when its TTL has elapsed, so this is a cheap no-op most iterations.
@@ -243,6 +246,22 @@ int main() {
                 blit_art(np.paused);
                 prev_paused = np.paused;
                 log(np.paused ? "paused" : "resumed");
+            }
+        } else if (spotify::reauth_required()) {
+            // Token is dead until the owner reconnects — show how, instead of
+            // hiding the problem behind the weather screen.
+            const bool need_redraw =
+                mode != Mode::Reauth ||
+                (now - last_reauth_draw) >= cfg::WEATHER_REDRAW.count();
+            if (need_redraw) {
+                set_brightness(base_brightness());
+                render::reauth(canvas, fonts);
+                canvas = matrix->SwapOnVSync(canvas);
+                last_reauth_draw = now;
+                if (mode != Mode::Reauth) log("show reauth screen");
+                mode = Mode::Reauth;
+                prev_art_url.clear();
+                art_buf = {};
             }
         } else {
             // Treat Spotify network failures the same as "nothing playing" —

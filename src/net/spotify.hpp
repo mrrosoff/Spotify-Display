@@ -9,6 +9,10 @@ namespace spotify {
 // token was present.
 bool init();
 
+// True when the broker last reported that the Spotify account needs to be
+// reconnected (HTTP 503). Cleared once a token fetch succeeds again.
+bool reauth_required();
+
 struct NowPlaying {
     bool active = false;         // an item is loaded in the player (playing or paused)
     bool paused = false;         // active && !is_playing

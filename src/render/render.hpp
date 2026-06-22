@@ -12,6 +12,8 @@ namespace render {
 
 void loading(rgb_matrix::Canvas *canvas, const Fonts &fonts);
 
+void reauth(rgb_matrix::Canvas *canvas, const Fonts &fonts);
+
 void weather(
     rgb_matrix::Canvas *canvas,
     const Fonts &fonts,
