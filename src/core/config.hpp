@@ -43,11 +43,14 @@ inline constexpr int FAIL_THRESHOLD = 5;
 // Boot grace before matrix init (keeps SSH responsive on fresh boot).
 inline constexpr auto BOOT_GRACE = std::chrono::seconds{60};
 
-// Default Spotify app credentials. Override at runtime with
-// SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET.
-inline constexpr std::string_view DEFAULT_CLIENT_ID =
-    "a9a84f65fc9f47568870f4c0c0185e3a";
-inline constexpr std::string_view DEFAULT_CLIENT_SECRET =
-    "7cb7fe064e1844c19e87a2d475573948";
+// Token broker: the website mints short-lived Spotify access tokens for this
+// device. Override the endpoint at runtime with SPOTIFY_TOKEN_URL; the
+// per-device secret comes from SPOTIFY_DEVICE_TOKEN (no default).
+inline constexpr std::string_view DEFAULT_TOKEN_URL =
+    "https://api.maxrosoff.com/spotify/token";
+
+// Cooldown before re-asking the broker after a failed token fetch, so a
+// pending reauth (broker 503) doesn't get hammered every poll.
+inline constexpr auto TOKEN_RETRY_COOLDOWN = std::chrono::seconds{30};
 
 }  // namespace cfg

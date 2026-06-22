@@ -4,9 +4,9 @@
 
 namespace spotify {
 
-// Initialize from environment. Reads SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET,
-// and (required) SPOTIFY_REFRESH_TOKEN. Returns true if a refresh token was
-// present.
+// Initialize from environment. Reads (required) SPOTIFY_DEVICE_TOKEN and
+// optional SPOTIFY_TOKEN_URL (the broker endpoint). Returns true if a device
+// token was present.
 bool init();
 
 struct NowPlaying {

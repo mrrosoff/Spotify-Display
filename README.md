@@ -34,17 +34,21 @@ git -C ~/rpi-rgb-led-matrix checkout e947417
 make -C ~/rpi-rgb-led-matrix/lib
 ```
 
-Then clone this repo and run the one-time setup:
+Then clone this repo, install the systemd unit, and write the device env file:
 
 ```bash
 git clone https://github.com/mrrosoff/Spotify-Display.git ~/Spotify-Display
 cd ~/Spotify-Display
-./scripts/setup.sh
+sudo install -m 0644 startup/spotifydisplay.service /etc/systemd/system/
+sudo install -m 0600 startup/spotifydisplay.env.example /etc/spotifydisplay.env
+sudo systemctl daemon-reload
 ```
 
-`setup.sh` walks you through the Spotify OAuth flow, writes
-`/etc/spotifydisplay.env` with the resulting refresh token, and installs the
-systemd unit. After it finishes:
+Edit `/etc/spotifydisplay.env` and set `SPOTIFY_DEVICE_TOKEN` to this device's
+secret (the value stored at SSM `/website/spotify/device-secret`). The Pi never
+holds Spotify credentials — it fetches short-lived access tokens from the token
+broker on `maxrosoff.com`. To (re)authorize the broker with a Spotify account,
+run `sudo spotify` in the website terminal. Then:
 
 ```bash
 make

@@ -19,18 +19,17 @@ namespace spotify {
 
 namespace {
 
-constexpr const char *TOKEN_URL = "https://accounts.spotify.com/api/token";
 constexpr const char *NOW_PLAYING_URL =
     "https://api.spotify.com/v1/me/player/currently-playing";
 
 // State guarded by mtx — accessed from the polling thread only today, but
 // keeping the discipline mirrors Muni's cache pattern.
 mutex mtx;
-string client_id;
-string client_secret;
-string refresh_token;
+string token_url;
+string device_token;
 string access_token;
 double access_token_expires_at = 0.0;  // unix seconds
+double next_token_attempt_at = 0.0;    // monotonic seconds; cooldown gate
 
 // Single persistent HTTP session for token refresh + playback polls. All
 // Spotify calls hit api.spotify.com / accounts.spotify.com — reuse keeps
@@ -47,96 +46,50 @@ string env_or(const char *name, string_view fallback) {
     return (v && *v) ? string(v) : string(fallback);
 }
 
-string url_encode(const string &s) {
-    string out;
-    out.reserve(s.size() * 3);
-    static const char hex[] = "0123456789ABCDEF";
-    for (unsigned char c : s) {
-        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
-            out.push_back(static_cast<char>(c));
-        } else {
-            out.push_back('%');
-            out.push_back(hex[c >> 4]);
-            out.push_back(hex[c & 0xF]);
-        }
-    }
-    return out;
-}
-
-string base64_encode(const string &in) {
-    static const char tbl[] =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    string out;
-    out.reserve(((in.size() + 2) / 3) * 4);
-    int val = 0, bits = -6;
-    for (unsigned char c : in) {
-        val = (val << 8) | c;
-        bits += 8;
-        while (bits >= 0) {
-            out.push_back(tbl[(val >> bits) & 0x3F]);
-            bits -= 6;
-        }
-    }
-    if (bits > -6) out.push_back(tbl[((val << 8) >> (bits + 8)) & 0x3F]);
-    while (out.size() % 4) out.push_back('=');
-    return out;
-}
-
-// Caller must NOT hold mtx.
-bool refresh_access_token() {
-    string id, secret, rt;
+// Caller must NOT hold mtx. Asks the broker for a fresh access token, sending
+// the per-device secret as a bearer token.
+bool fetch_access_token() {
+    string url, dev;
     {
         lock_guard lg(mtx);
-        id = client_id;
-        secret = client_secret;
-        rt = refresh_token;
+        url = token_url;
+        dev = device_token;
     }
-    if (rt.empty()) {
-        log("spotify: no refresh_token available");
+    if (dev.empty()) {
+        log("spotify: SPOTIFY_DEVICE_TOKEN unset");
         return false;
     }
-    const string body = "grant_type=refresh_token&refresh_token=" + url_encode(rt);
-    const string basic = "Basic " + base64_encode(id + ":" + secret);
-    const vector<string> headers = {
-        "Content-Type: application/x-www-form-urlencoded",
-        "Authorization: " + basic,
-    };
     string resp, err;
     long code = 0;
     const double t0 = tu::monotonic();
-    if (!session().post(
-            TOKEN_URL,
-            headers,
-            body,
-            cfg::CONNECT_TIMEOUT_S,
-            cfg::READ_TIMEOUT_S,
-            &resp,
-            &code,
-            &err
+    if (!session().get_bearer(
+            url, dev, cfg::CONNECT_TIMEOUT_S, cfg::READ_TIMEOUT_S, &resp, &code, &err
         )) {
-        // Server-status errors leave the connection healthy; anything else
-        // is transport, so recycle the pooled curl handle.
-        if (err.rfind("HTTP ", 0) != 0) session().reset();
-        log("spotify token refresh FAILED in ", tu::monotonic() - t0, "s: ", err);
+        // 503 means the broker has no usable refresh token — the owner must
+        // reconnect via the website (`sudo spotify`). It's recoverable, so we
+        // just wait and retry rather than treating it as fatal.
+        if (code == 503) {
+            log("spotify: broker reports reauth required — reconnect with "
+                "`sudo spotify` on maxrosoff.com");
+        } else {
+            // Server-status errors leave the connection healthy; anything else
+            // is transport, so recycle the pooled curl handle.
+            if (err.rfind("HTTP ", 0) != 0) session().reset();
+            log("spotify token fetch FAILED in ", tu::monotonic() - t0, "s: ", err);
+        }
         return false;
     }
     try {
         const auto j = json::parse(resp);
         const auto at = j.at("access_token").get<string>();
         const int expires_in = j.value("expires_in", 3600);
-        // Spotify *may* rotate the refresh token; if so, persist it in memory.
-        string new_rt;
-        if (auto it = j.find("refresh_token"); it != j.end() && it->is_string()) {
-            new_rt = it->get<string>();
-        }
         {
             lock_guard lg(mtx);
             access_token = at;
             access_token_expires_at =
                 static_cast<double>(tu::now_unix()) + expires_in;
-            if (!new_rt.empty()) refresh_token = new_rt;
         }
-        log("spotify token refreshed in ", tu::monotonic() - t0, "s (expires_in=",
+        log("spotify token fetched in ", tu::monotonic() - t0, "s (expires_in=",
             expires_in, "s)");
         return true;
     } catch (const exception &e) {
@@ -154,8 +107,14 @@ string get_valid_access_token() {
             static_cast<double>(tu::now_unix()) + slack < access_token_expires_at) {
             return access_token;
         }
+        if (tu::monotonic() < next_token_attempt_at) return {};
     }
-    if (!refresh_access_token()) return {};
+    if (!fetch_access_token()) {
+        lock_guard lg(mtx);
+        next_token_attempt_at =
+            tu::monotonic() + static_cast<double>(cfg::TOKEN_RETRY_COOLDOWN.count());
+        return {};
+    }
     lock_guard lg(mtx);
     return access_token;
 }
@@ -163,19 +122,17 @@ string get_valid_access_token() {
 }  // namespace
 
 bool init() {
-    const string id = env_or("SPOTIFY_CLIENT_ID", cfg::DEFAULT_CLIENT_ID);
-    const string secret = env_or("SPOTIFY_CLIENT_SECRET", cfg::DEFAULT_CLIENT_SECRET);
-    const string rt = env_or("SPOTIFY_REFRESH_TOKEN", "");
-    if (rt.empty()) {
-        log("spotify: SPOTIFY_REFRESH_TOKEN unset — run scripts/setup.sh");
+    const string url = env_or("SPOTIFY_TOKEN_URL", cfg::DEFAULT_TOKEN_URL);
+    const string dev = env_or("SPOTIFY_DEVICE_TOKEN", "");
+    if (dev.empty()) {
+        log("spotify: SPOTIFY_DEVICE_TOKEN unset — set it in /etc/spotifydisplay.env");
     }
     {
         lock_guard lg(mtx);
-        client_id = id;
-        client_secret = secret;
-        refresh_token = rt;
+        token_url = url;
+        device_token = dev;
     }
-    return !rt.empty();
+    return !dev.empty();
 }
 
 bool current_playback(NowPlaying *out, string *error) {
