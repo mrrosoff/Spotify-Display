@@ -1,6 +1,5 @@
 #include "render/draw.hpp"
 
-#include <cmath>
 #include <cstdint>
 #include <string>
 
@@ -70,29 +69,47 @@ void icon(Canvas *c, const XbmIcon &ic, int x0, int y0, const Color &color) {
 }
 
 void spotify_logo(Canvas *c, int cx, int cy, const Color &color) {
-    // Filled disc with three nested convex-up arc gaps. The arcs share a
-    // center below the disc and stay inside the rim so the circle reads solid.
-    constexpr int R = 13;
-    constexpr double AC = 13.0;  // arc center, below the disc center
-    constexpr double TH = 1.5;   // half-thickness of each gap
-    const double rad[3] = {6.0, 11.0, 16.0};
-    const double inner = (R - 2.0) * (R - 2.0);
+    // Rasterized from the canonical Spotify mark (green disc minus the three
+    // wave bars). 27x27, one bit per pixel, MSB = leftmost column; the bars keep
+    // the real logo's slight asymmetry rather than a forced mirror. Centered on
+    // (cx, cy).
+    constexpr int W = 27;
+    static const uint32_t BITS[W] = {
+        0x0002000,  // .............#.............
+        0x003fe00,  // .........#########.........
+        0x00fff80,  // .......#############.......
+        0x03fffe0,  // .....#################.....
+        0x07ffff0,  // ....###################....
+        0x0fffff8,  // ...#####################...
+        0x0fffff8,  // ...#####################...
+        0x1fffffc,  // ..#######################..
+        0x1c000fe,  // ..###..............#######.
+        0x3c0001e,  // .####.................####.
+        0x3fffc0e,  // .################......###.
+        0x3ffff8e,  // .###################...###.
+        0x3f007fe,  // .######.........##########.
+        0x7e000ff,  // ######.............########
+        0x3fff83e,  // .###############.....#####.
+        0x3ffff3e,  // .##################..#####.
+        0x3f80ffe,  // .#######.......###########.
+        0x3e001fe,  // .#####............########.
+        0x1fff8fe,  // ..##############...#######.
+        0x1fffefc,  // ..################.######..
+        0x0fffff8,  // ...#####################...
+        0x0fffff8,  // ...#####################...
+        0x07ffff0,  // ....###################....
+        0x03fffe0,  // .....#################.....
+        0x00fff80,  // .......#############.......
+        0x007ff00,  // ........###########........
+        0x0002000,  // .............#.............
+    };
 
-    for (int y = -R; y <= R; ++y) {
-        for (int x = -R; x <= R; ++x) {
-            const double r2 = static_cast<double>(x * x + y * y);
-            if (r2 > static_cast<double>(R * R)) continue;
-            bool gap = false;
-            if (r2 <= inner && y <= AC) {
-                const double d = std::hypot(static_cast<double>(x), y - AC);
-                for (const double r : rad) {
-                    if (std::fabs(d - r) <= TH) {
-                        gap = true;
-                        break;
-                    }
-                }
+    for (int row = 0; row < W; ++row) {
+        const uint32_t bits = BITS[row];
+        for (int col = 0; col < W; ++col) {
+            if ((bits >> (W - 1 - col)) & 1u) {
+                c->SetPixel(cx - W / 2 + col, cy - W / 2 + row, color.r, color.g, color.b);
             }
-            if (!gap) c->SetPixel(cx + x, cy + y, color.r, color.g, color.b);
         }
     }
 }
