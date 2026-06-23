@@ -1,5 +1,6 @@
 #include "render/draw.hpp"
 
+#include <cmath>
 #include <cstdint>
 #include <string>
 
@@ -64,6 +65,34 @@ void icon(Canvas *c, const XbmIcon &ic, int x0, int y0, const Color &color) {
             if (ic.pixels[y * ic.width + x]) {
                 c->SetPixel(x0 + x, y0 + y, color.r, color.g, color.b);
             }
+        }
+    }
+}
+
+void spotify_logo(Canvas *c, int cx, int cy, const Color &color) {
+    // Filled disc with three nested convex-up arc gaps. The arcs share a
+    // center below the disc and stay inside the rim so the circle reads solid.
+    constexpr int R = 13;
+    constexpr double AC = 13.0;  // arc center, below the disc center
+    constexpr double TH = 1.5;   // half-thickness of each gap
+    const double rad[3] = {6.0, 11.0, 16.0};
+    const double inner = (R - 2.0) * (R - 2.0);
+
+    for (int y = -R; y <= R; ++y) {
+        for (int x = -R; x <= R; ++x) {
+            const double r2 = static_cast<double>(x * x + y * y);
+            if (r2 > static_cast<double>(R * R)) continue;
+            bool gap = false;
+            if (r2 <= inner && y <= AC) {
+                const double d = std::hypot(static_cast<double>(x), y - AC);
+                for (const double r : rad) {
+                    if (std::fabs(d - r) <= TH) {
+                        gap = true;
+                        break;
+                    }
+                }
+            }
+            if (!gap) c->SetPixel(cx + x, cy + y, color.r, color.g, color.b);
         }
     }
 }
