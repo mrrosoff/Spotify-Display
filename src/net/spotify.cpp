@@ -29,7 +29,7 @@ string device_token;
 string access_token;
 double access_token_expires_at = 0.0;  // unix seconds
 double next_token_attempt_at = 0.0;    // monotonic seconds; retry cooldown
-bool reauth_needed = false;            // broker last returned 503
+bool reauth_needed = false;            // broker last returned 246
 
 // Reused across polls to keep TCP + TLS warm. Lazy function-local static so the
 // curl handle is created after curl_global_init(), not during static init.
@@ -58,16 +58,16 @@ bool fetch_access_token() {
     if (!session().get_bearer(
             url, dev, cfg::CONNECT_TIMEOUT_S, cfg::READ_TIMEOUT_S, &resp, &code, &err
         )) {
-        // 503 means the broker has no usable token until the owner reconnects
-        // via `sudo spotify`; recoverable, so just flag it (logged once).
-        if (code == 503) {
-            lock_guard lg(mtx);
-            if (!reauth_needed) log("spotify: reauth required — run `sudo spotify`");
-            reauth_needed = true;
-        } else {
-            if (err.rfind("HTTP ", 0) != 0) session().reset();
-            log("spotify token fetch failed: ", err);
-        }
+        if (err.rfind("HTTP ", 0) != 0) session().reset();
+        log("spotify token fetch failed: ", err);
+        return false;
+    }
+    // 246 means the broker has no usable token until the owner reconnects via
+    // `sudo spotify`; it's a success status (no token in the body), so flag it.
+    if (code == 246) {
+        lock_guard lg(mtx);
+        if (!reauth_needed) log("spotify: reauth required — run `sudo spotify`");
+        reauth_needed = true;
         return false;
     }
     try {

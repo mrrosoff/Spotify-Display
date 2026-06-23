@@ -50,7 +50,7 @@ inline constexpr std::string_view DEFAULT_TOKEN_URL =
     "https://api.maxrosoff.com/spotify/token";
 
 // Cooldown before re-asking the broker after a failed token fetch, so a
-// pending reauth (broker 503) doesn't get hammered every poll.
+// pending reauth (broker 246) doesn't get hammered every poll.
 inline constexpr auto TOKEN_RETRY_COOLDOWN = std::chrono::seconds{30};
 
 }  // namespace cfg
