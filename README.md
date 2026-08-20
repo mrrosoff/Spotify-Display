@@ -87,28 +87,6 @@ userspace threads (sshd, our curl calls) get whatever's left. In practice:
   concurrent outbound calls. Weather and Spotify polls are sequenced so
   they never share the kernel's network stack at the same instant.
 
-### The CA bundle gotcha (read this if HTTPS is slow)
-
-Debian's libcurl default sets `CURLOPT_CAINFO=/etc/ssl/certs/ca-certificates.crt`
-— a single ~200 KB file with 130+ CA certs. Every fresh `curl_easy_init()`
-re-parses the entire bundle to build a new `SSL_CTX`. On a Pi Zero ARMv6 with
-no crypto acceleration, that's **~1.4 s of user CPU per HTTPS call**, which
-also stretches the wall-clock handshake long enough that strict servers (like
-Spotify's accounts endpoint) RST mid-handshake.
-
-The fix is one line in `src/net/http.cpp`:
-
-```cpp
-curl_easy_setopt(curl, CURLOPT_CAINFO, nullptr);
-curl_easy_setopt(curl, CURLOPT_CAPATH, "/etc/ssl/certs");
-```
-
-OpenSSL hash-lookups only the specific issuer it needs to verify a chain
-from the hashed cert directory, instead of slurping the whole bundle. Drops
-per-call CPU ~10× (1.4 s → 0.13 s). Verification is still on. Confusingly,
-Debian's `/usr/bin/curl` is fast out of the box — it's only the libcurl C
-API that defaults to the slow bundle path.
-
 If SSH genuinely won't land and you need to recover the Pi:
 
 1. Mask the unit before next boot by editing `bootfs/cmdline.txt` (FAT

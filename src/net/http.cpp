@@ -38,11 +38,10 @@ void apply_common(CURL *curl, const string &url, long ct, long rt, string *body,
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, ct + rt);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
-    // Use the hashed CA directory instead of the single ~200KB bundle file
-    // (Debian's default for libcurl). With the bundle, every fresh easy handle
-    // re-parses 130+ CA certs into a new SSL_CTX — that was costing ~1.4s of
-    // user CPU per call on a Pi Zero. With the directory, OpenSSL hash-lookups
-    // only the specific issuer needed to verify the server's chain.
+    // Hashed CA directory, not Debian's default single-file bundle. The bundle
+    // makes every new easy handle parse 130+ certs into a fresh SSL_CTX: 1.4s of
+    // CPU per call on a Pi Zero, vs 0.13s when OpenSSL looks up just the issuer
+    // it needs. Only libcurl defaults to the bundle; /usr/bin/curl does not.
     curl_easy_setopt(curl, CURLOPT_CAINFO, nullptr);
     curl_easy_setopt(curl, CURLOPT_CAPATH, "/etc/ssl/certs");
     // Force HTTP/1.1. Default would ALPN-negotiate HTTP/2 against
